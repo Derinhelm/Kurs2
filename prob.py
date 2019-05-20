@@ -500,10 +500,10 @@ class Sentence:
         return bestParsePoint
 
 def main(db, str1):
-    s = Sentence()
-    s.setString(str1)
-    s.morfParse()
-    s.getGPatterns()
-    res = s.sintParse()
-    res.visualizate()
-    return res
+        s = Sentence()
+        s.setString(str1)
+        s.morfParse()
+        s.getGPatterns()
+        res = s.sintParse()
+        res.visualizate()
+        return res
