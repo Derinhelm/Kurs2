@@ -25,7 +25,7 @@ class GPatternList:
         self.firstLevel = []
         self.secondLevel = []
         self.thirdLevel = []
-def extractFirstLevel(word, curMorf):
+def extractFirstLevel(word, curMorf, db):
     s1 = "SELECT number_morf FROM morf_characters_of_word WHERE " + \
         "s_cl = \'" + str(curMorf.s_cl).split('.')[1] + "\' AND " + \
         "animate = \'" + str(curMorf.animate).split('.')[1] + "\' AND " + \
@@ -67,7 +67,7 @@ def extractFirstLevel(word, curMorf):
     #print(firLev)
     return firLev
 
-def extractSecondLevel(word, curMorf):
+def extractSecondLevel(word, curMorf, db):
     s0 = "SELECT number_morf FROM morf_characters_of_word WHERE " + \
         "s_cl = \'" + str(curMorf.s_cl).split('.')[1] + "\' AND " + \
         "animate = \'" + str(curMorf.animate).split('.')[1] + "\' AND " + \
@@ -107,7 +107,7 @@ def extractSecondLevel(word, curMorf):
     #print(secLev)
     return secLev
 
-def extractThirdLevel(word, curMorf):
+def extractThirdLevel(word, curMorf, db):
     s0 = "SELECT number_morf FROM morf_characters_of_word WHERE " + \
         "s_cl = \'" + str(curMorf.s_cl).split('.')[1] + "\' AND " + \
         "animate = \'" + str(curMorf.animate).split('.')[1] + "\' AND " + \
@@ -158,12 +158,12 @@ class Word:
             if (m.s_cl == Es_cl.preposition):
                 self.canPrep = True
 
-    def getGPatterns(self):
+    def getGPatterns(self, db):
         for curMorf in self.morf:
             curPatt = GPatternList()
-            curFirst = extractFirstLevel(self.word, curMorf)
-            curSec = extractSecondLevel(self.word, curMorf)
-            curThird = extractThirdLevel(self.word, curMorf)
+            curFirst = extractFirstLevel(self.word, curMorf, db)
+            curSec = extractSecondLevel(self.word, curMorf, db)
+            curThird = extractThirdLevel(self.word, curMorf, db)
             curPatt.firstLevel += curFirst
             curPatt.secondLevel += curSec
             curPatt.thirdLevel += curThird
@@ -442,9 +442,9 @@ class Sentence:
         for curWord in self.wordList:
             curWord.morfParse()
 
-    def getGPatterns(self):
+    def getGPatterns(self, db):
         for curWord in self.wordList:
-            curWord.getGPatterns()
+            curWord.getGPatterns(db)
 
     def getRootParsePoint(self):
         self.rootPP = ParsePoint()
@@ -467,7 +467,9 @@ class Sentence:
 
         return bestPoint
 
-    def sintParse(self):
+    def sintParse(self, needTrace = False):
+        if (needTrace):
+            tracePoints = []
         if (self.firstUse == True):
             self.firstUse = False
             self.getRootParsePoint()
@@ -476,7 +478,7 @@ class Sentence:
             print("Больше вариантов разбора нет")
             return None
         allWordsParsed = True
-
+        
         for curPointWord in bestParsePoint.parsePointWordList:
             if (curPointWord.parsed == False):
                 allWordsParsed = False
@@ -488,7 +490,11 @@ class Sentence:
             newPoint = bestParsePoint.getNextParsePoint()
             if (newPoint == None):
                 print("Не разобрано!")
-                return bestParsePoint
+                if (needTrace):
+                    return (bestParsePoint, tracePoints)
+                return (bestParsePoint)
+            if (needTrace):
+                tracePoints.append(newPoint)
             s1 = Sentence()
             s1.rootPP = bestParsePoint# а надо ли copy ???
             bestParsePoint = s1.getBestParsePoint()
@@ -497,13 +503,15 @@ class Sentence:
                 if (curPointWord.parsed == False):
                     allWordsParsed = False
                     break
-        return bestParsePoint
+        if (needTrace):
+            return (bestParsePoint, tracePoints)
+        return (bestParsePoint)
 
-def main(db, str1):
+def parse(db, str1, needTrace = False):
         s = Sentence()
         s.setString(str1)
         s.morfParse()
-        s.getGPatterns()
-        res = s.sintParse()
-        res.visualizate()
+        s.getGPatterns(db)
+        res = s.sintParse(needTrace)
+        res[0].visualizate()
         return res
