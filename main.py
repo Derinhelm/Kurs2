@@ -513,5 +513,8 @@ def parse(db, str1, needTrace = False):
         s.morfParse()
         s.getGPatterns(db)
         res = s.sintParse(needTrace)
-        res[0].visualizate()
+        if (needTrace):
+            res[0].visualizate()
+        else:
+            res.visualizate()
         return res
