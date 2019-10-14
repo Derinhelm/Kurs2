@@ -6,6 +6,7 @@ morph = pymorphy2.MorphAnalyzer()
 import postgresql
 import networkx as nx
 import matplotlib.pyplot as plt
+from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 
 class GPattern:
     def __init__(self, l = -1, textWord = "", depWordConstr = None, p = "", m = 0.0):
@@ -169,7 +170,7 @@ class Word:
             curPatt.thirdLevel += curThird
             self.gPatterns.append(curPatt)
 
-    def __init__(self, name=""):
+    def __init__(self, name = "", number = -1):
         self.word = name  # у Одинцева Word
 
         self.morf = []  # список объектов типа Morf
@@ -178,6 +179,7 @@ class Word:
         self.gPatterns = []  # список из GPatternList, i элемент - для i morf
         # с помощью морф.анализатора заполняем morf, с помощью базы - GPatterns
         self.canPrep = False # может ли слово быть использовано, как предлог
+        self.numberInSentence = number
 
 class Gp:
     def __init__(self):
@@ -208,6 +210,12 @@ class ParsePoint:
                     summ += curGp.mark
         return summ
 
+    def index(self, word1): # ищет в списке слов в данной точке разбора индекс данного слова(класса Word), вспомогательная функция
+        for i in range(len(self.parsePointWordList)):
+            if self.parsePointWordList[i].word == word1:
+                return i
+        return None
+    
     def checkInderectDependency (self, numberMain, numberDep):
         depWord = self.parsePointWordList[numberDep]
         mainWord = self.parsePointWordList[numberMain]
@@ -320,7 +328,7 @@ class ParsePoint:
         newParsePoint.parsePointWordList[mainPPWord].usedGp.append(newGp)
         return newParsePoint
 
-    def getNextParsePoint(self):
+    def getNextParsePoint(self): #(newPoint, flagFirstUse, firstWords)
         countParsed = 0
         parsed = []
         for i in range(len(self.parsePointWordList)):
@@ -337,8 +345,7 @@ class ParsePoint:
                         newParsePoint.parsePointWordList[i].parsed = True
                         newParsePoint.parsePointWordList[i].usedMorfAnswer = copy.deepcopy(curMorf)
                         self.childParsePoint.append(newParsePoint)
-                        return newParsePoint
-
+                        return (newParsePoint, True, [i]) # найдено первое для разбора слово
             #в предложении нет глагола
             for i in range(len(self.parsePointWordList)):
                 curPointWord = self.parsePointWordList[i]
@@ -348,7 +355,7 @@ class ParsePoint:
                         newParsePoint.parsePointWordList[i].parsed = True
                         newParsePoint.parsePointWordList[i].usedMorfAnswer = copy.deepcopy(curMorf)
                         self.childParsePoint.append(newParsePoint)
-                        return newParsePoint
+                        return (newParsePoint, True, [i]) # найдено первое для разбора слово
         else:
             bestMainWord = Word()
             bestDepWord = Word()
@@ -378,47 +385,57 @@ class ParsePoint:
             if (bestModelMark != 0):
                 newParsePoint = self.apply(bestMainWord, bestDepWord, bestPrep, usedDepMorf, bestModel)
                 self.childParsePoint.append(newParsePoint)
-                return newParsePoint
+                return (newParsePoint, False, None)
             print("No model")
-            return None
-    def visualizate(self):
+            return (None, False, None)
+        
+        
+    def addEdge(self, depth, newParsePointWordList, G1, shiftX, nameMainWord):
+#добавляет в граф новую зависимую вершину и новую связь!
+# beginIndex - строка, префикс названия 
+# depth - глубина
+#sList - исходное предложение - список слов
+# shiftX - смещение по х всего блока точек,зависимых от данного
+        for i in range(len(newParsePointWordList)):
+            newParsePointWord = newParsePointWordList[i]
+            newPointName = newParsePointWord.depWord.word
+            G1.add_node(newPointName, pos = [shiftX + i * 9, 20 - 2 * depth])
+            G1.add_edge(nameMainWord, newPointName)
+            depWordText = newParsePointWord.depWord
+            depWord1 = newParsePointWord.depWord
+            depWordInd = depWord1.numberInSentence
+            if (len(self.parsePointWordList[depWordInd].usedGp) != 0):
+                self.addEdge(depth + 1, self.parsePointWordList[depWordInd].usedGp, G1, i * 7, newPointName)
+    def visualizate(self, firstIndices):
         G1=nx.Graph()
         i = 0.5
-        for curWordParse in self.parsePointWordList:
-            G1.add_node(curWordParse.word.word, pos = [i, 1])
-            i += 4
-        max_x = i
-        numberPoint = 1
-        for curWordParse in self.parsePointWordList:
-            mainWord = curWordParse.word.word
-            for curPatt in curWordParse.usedGp:
-                point = str(numberPoint)
-                G1.add_node(point, pos = [numberPoint * 3 + 5, 5])
-                G1.add_edge(point, mainWord)
-                G1.add_edge(point, curPatt.depWord.word)
-                if (curPatt.model.prep != "None"):
-                    G1.add_edge(point, curPatt.model.prep)
-                #print(mainWord, curPatt.depWord.word)
-                #G1.add_edge("")
-                #print(curPatt.depWord.word)
-                numberPoint += 1
-        pos=nx.get_node_attributes(G1,'pos')
+        #for curWordParse in res.parsePointWordList:
+        #    G1.add_node(curWordParse.word.word, pos = [i, 1])
+        #    i += 4
+        #for curPoint in parse1.usedGp:
+        begin = firstIndices[0]
+        parse1 = self.parsePointWordList[begin].usedGp
+        textMainWord = self.parsePointWordList[begin].word.word
         max_x = 15
         max_y = 5.0
         # установить их потом!!!
+        G1.add_node(textMainWord, pos = [5, 20])
+        self.addEdge(1, parse1, G1, 0, textMainWord)
+        pos=nx.get_node_attributes(G1,'pos')
 
-        fig = plt.figure(figsize=(20,5))
+        fig = plt.figure(figsize=(20,22))
         plt.scatter(max_x + 0.1, max_y + 0.1, s = 1, c = 'white')
         plt.scatter(-0.5, 0.0, s = 1, c = 'white')
         plt.scatter(max_x + 0.1, 0.0, s = 1, c = 'white')
+        #pos=graphviz_layout(G1, prog='dot')
         nx.draw(G1, pos, with_labels = True, node_size=1, horizontalalignment='center', verticalalignment='top', font_size = 20)
-
 class Sentence:
     def __init__(self):
         self.inputStr = ""
         self.wordList = []
         self.rootPP = ParsePoint()  # ????????
         self.firstUse = True
+        self.firstParseWordsIndices = [] # слова, первые для разбора, в простых предложениях
 
     def setString(self, inputStr1):
         self.inputStr = inputStr1
@@ -427,16 +444,18 @@ class Sentence:
         # дефис только в словах очень-очень и тп,
         punctuation = [' ', '.', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
         curWord = ""
+        numberWord = 0
         for i in self.inputStr:
             if (i in punctuation):
                 if (len(curWord) != 0):
-                    self.wordList.append(Word(curWord.lower()))
+                    self.wordList.append(Word(curWord.lower(), numberWord))
+                    numberWord += 1
                     curWord = ""
             elif (i != '-' or (len(curWord) != 0)):  # - и непустое слово -  это дефис
                 curWord = curWord + i
         if (len(curWord) != 0):
-            self.wordList.append(Word(curWord.lower()))
-            curWord = ""
+            self.wordList.append(Word(curWord.lower()), numberWord)
+
 
     def morfParse(self):
         for curWord in self.wordList:
@@ -466,7 +485,20 @@ class Sentence:
                 bestPoint = curBest
 
         return bestPoint
-
+    
+# проверка связности - считаем, сколько слов в связном дереве, если = кол-ву слов, то все ок
+# на вход - res(т.е. bestParsePoint)
+    def countDependent(curParsePoint, firstWordIndex):
+        newParsePointWord = curParsePoint.parsePointWordList[firstWordIndex]
+        count = 1
+        for curModel in newParsePointWord.usedGp:
+            depWord1 = curModel.depWord
+            print(depWord1.word)
+            count +=  countDependent(curParsePoint, depWord1.numberInSentence)
+        return count
+    def checkConnectivity(self, curParsePoint): # параметр - предложение
+        return len(self.wordList) == countDependent(curParsePoint, self.firstParseWordsIndices[0])
+    
     def sintParse(self, needTrace = False):
         if (needTrace):
             tracePoints = []
@@ -487,7 +519,7 @@ class Sentence:
             #for ti in range(len(bestParsePoint.parsePointWordList)):
             #    print(bestParsePoint.parsePointWordList[ti].parsed)
             #print("----------------")
-            newPoint = bestParsePoint.getNextParsePoint()
+            (newPoint, flagFirstUse, firstWords) = bestParsePoint.getNextParsePoint()
             if (newPoint == None):
                 print("Не разобрано!")
                 if (needTrace):
@@ -495,6 +527,8 @@ class Sentence:
                 return (bestParsePoint)
             if (needTrace):
                 tracePoints.append(newPoint)
+            if (flagFirstUse):
+                self.firstParseWordsIndices = firstWords
             s1 = Sentence()
             s1.rootPP = bestParsePoint# а надо ли copy ???
             bestParsePoint = s1.getBestParsePoint()
@@ -514,7 +548,7 @@ def parse(db, str1, needTrace = False):
         s.getGPatterns(db)
         res = s.sintParse(needTrace)
         if (needTrace):
-            res[0].visualizate()
+            res[0].visualizate(s.firstParseWordsIndices)
         else:
-            res.visualizate()
+            res.visualizate(s.firstParseWordsIndices)
         return res
