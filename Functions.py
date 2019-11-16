@@ -8,28 +8,28 @@ def parseToMorf(text, curParse):
    # print(curParse)
    # print(curParse.tag)
     if (curParse.normal_form == "себя"):
-        curMorf.s_cl = Es_cl.reflexivepronoun
+        curMorf.s_cl = 'reflexivepronoun'
     elif (curParse.normal_form in ['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они']):
-        curMorf.s_cl = Es_cl.personalpronoun
+        curMorf.s_cl = 'personalpronoun'
     elif ('Impe' in curParse.tag):
-        curMorf.s_cl = Es_cl.unpersonalverb
+        curMorf.s_cl = 'unpersonalverb'
     elif ('Mult' in curParse.tag):
-        curMorf.s_cl = Es_cl.frequentativeverb
+        curMorf.s_cl = 'frequentativeverb'
     elif ('Anum' in curParse.tag):
-        curMorf.s_cl = Es_cl.numberordinal # проверить!!!!
+        curMorf.s_cl = 'numberordinal' # проверить!!!!
     elif (curParse.normal_form == "один"):
-        curMorf.s_cl = Es_cl.numberone
+        curMorf.s_cl = 'numberone'
     elif (curParse.normal_form in ['два', 'оба', 'полтора']):
-        curMorf.s_cl = Es_cl.numbertwo
+        curMorf.s_cl = 'numbertwo'
     elif (curParse.normal_form in ['три', 'четыре', 'сколько', 'несколько', 'столько', 'много', 'немного'] or 'Coll' in curParse.tag):
-        curMorf.s_cl = Es_cl.numberthree
+        curMorf.s_cl = 'numberthree'
     else:
         curMorf.s_cl = cl[str(curParse.tag.POS)]
     
     #print(curParse.tag.POS)#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     curMorf.animate = anim[str(curParse.tag.animacy)]
     if ("Ms-f" in curParse.tag):
-        curMorf.gender = Egender.malefemale
+        curMorf.gender = 'malefemale'
     else:
         curMorf.gender = gend[str(curParse.tag.gender)]
     curMorf.number = numb[str(curParse.tag.number)]
@@ -45,26 +45,26 @@ def parseToMorf(text, curParse):
     if (curCl in ('VERB', 'INFN', 'PRTF', 'PRTS', 'GRND', 'PRED')): #PRED -кат.сост. мб убрать
         if (text[-2:] == "ся"):
             if (curCl == 'VERB' or curCl == 'INFN'):
-                curMorf.reflection = Ereflection.reflexive
+                curMorf.reflection = 'reflexive'
             else:
-                curMorf.reflection = Ereflection.reflexiveForm
+                curMorf.reflection = 'reflexiveForm'
         else:
-            curMorf.reflection = Ereflection.unreflexive
+            curMorf.reflection = 'unreflexive'
     else:
-        curMorf.reflection = Ereflection.reflectionAny
+        curMorf.reflection = 'reflectionAny'
     curMorf.perfective = perf[str(curParse.tag.aspect)]
     curMorf.transitive = trans[str(curParse.tag.transitivity)]
     curMorf.person = pers[str(curParse.tag.person)]
     if (curCl == 'INFN'):
-        curMorf.tense = Etense.infinitive
+        curMorf.tense = 'infinitive'
     elif(curParse.tag.mood == 'impr'):
-        curMorf.tense = Etense.imperative
+        curMorf.tense = 'imperative'
     else:
         curMorf.tense = tense[str(curParse.tag.tense)]
     curMorf.voice = voice[str(curParse.tag.voice)]
     #curMorf.degree =  ????????????????????????????????????????????????????????????????
-    if (len(curParse.lexeme) == 1 or curMorf.s_cl == Es_cl.preposition or curMorf.s_cl == Es_cl.gerund or curMorf.s_cl == Es_cl.conjunction or curMorf.s_cl == Es_cl.interjection or curMorf.s_cl == Es_cl.adverb): 
-        curMorf.static = True
+    if (len(curParse.lexeme) == 1 or curMorf.s_cl == 'preposition' or curMorf.s_cl == 'gerund' or curMorf.s_cl == 'conjunction' or curMorf.s_cl == 'interjection' or curMorf.s_cl == 'adverb'): 
+        curMorf.static = 'true'
     return curMorf
 
 def findMorf(curMorf, db1):   #на выход - одно число, номер морфа

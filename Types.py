@@ -44,13 +44,16 @@ tense = {'pres': 'present','past':'past', 'futr': 'future', \
         'None':'tense_any', 'inf': 'infinitive', 'imp':'imperative'}
 voice = {'actv':'active', 'pssv': 'passive', 'None':'voice_any'}
 
-NUMBER_PARAMETRS = 13
 
 columns_imp_feat = db.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'important_features' AND table_schema = 'public';")
 
 columns_morf = db.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'morf_characters_of_word' AND table_schema = 'public';")
 
+NUMBER_PARAMETRS = 13
+
 class Morf: # для хранения морфологических характеристик
+    names = set(['s_cl', 'animate', 'gender', 'number', 'case1', 'reflection', 'perfective',\
+            'transitive', 'person', 'tense', 'voice', 'degree', 'static'])
     def __init__(self, cl  = 'not_imp', an = 'not_imp', \
                  gen = 'not_imp', num = 'not_imp', \
                  cas = 'not_imp', ref = 'not_imp',\
