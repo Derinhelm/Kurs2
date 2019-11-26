@@ -36,7 +36,7 @@ def parseToMorf(text, curParse):
     if (str(curParse.tag.case) in cas):
         curMorf.case1 = cas[str(curParse.tag.case)]
     else:
-        print("wrong case")
+        print("wrong case", curParse.tag.case)
         return None
     #if 'Refl' in curMorf.tag:
     #    curMorf.Reflection = Ereflection.reflexive
@@ -47,11 +47,11 @@ def parseToMorf(text, curParse):
             if (curCl == 'VERB' or curCl == 'INFN'):
                 curMorf.reflection = 'reflexive'
             else:
-                curMorf.reflection = 'reflexiveForm'
+                curMorf.reflection = 'reflexive_form'
         else:
             curMorf.reflection = 'unreflexive'
     else:
-        curMorf.reflection = 'reflectionAny'
+        curMorf.reflection = 'reflection_any'
     curMorf.perfective = perf[str(curParse.tag.aspect)]
     curMorf.transitive = trans[str(curParse.tag.transitivity)]
     curMorf.person = pers[str(curParse.tag.person)]
@@ -67,25 +67,6 @@ def parseToMorf(text, curParse):
         curMorf.static = 'true'
     return curMorf
 
-def findMorf(curMorf, db1):   #на выход - одно число, номер морфа
-    s = "SELECT number_morf FROM morf_characters_of_word WHERE " + \
-        "s_cl = \'" + str(curMorf.s_cl).split('.')[1] + "\' AND " + \
-        "animate = \'" + str(curMorf.animate).split('.')[1] + "\' AND " + \
-        "gender = \'" + str(curMorf.gender).split('.')[1] + "\' AND " + \
-        "number = \'" + str(curMorf.number).split('.')[1] + "\' AND " + \
-        "case1 = \'" + str(curMorf.case1).split('.')[1] + "\' AND " + \
-        "reflection = \'" + str(curMorf.reflection).split('.')[1] + "\' AND " + \
-        "perfective = \'" + str(curMorf.perfective).split('.')[1] + "\' AND " + \
-        "transitive = \'" + str(curMorf.transitive).split('.')[1] + "\' AND " + \
-        "person = \'" + str(curMorf.person).split('.')[1] + "\' AND " + \
-        "tense = \'" + str(curMorf.tense).split('.')[1] + "\' AND " + \
-        "voice = \'" + str(curMorf.voice).split('.')[1] + "\' AND " + \
-        "degree = \'" + str(curMorf.degree).split('.')[1] + "\' AND " + \
-        "static = \'" + str(curMorf.static) + "\'" + ";"
-    res = db1.query(s)
-    if (len(res) == 0):
-        print(s)
-    return res[0][0]
               
 def findWord(word, db1, strForWord): # на выход - массив из номеров слов
 #strForWord - дополнительная характеристика слова(главное, зависимое)

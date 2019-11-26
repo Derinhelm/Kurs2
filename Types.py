@@ -1,7 +1,3 @@
-import postgresql
-from enum import Enum
-db = postgresql.open('pq://derin:qwerty@localhost:5432/models')
-
 
 #словари соотвествия между нашими обозначениями и метками анализатора
 cl = {'NOUN':'noun', 'ADJF': 'adjective', 'ADJS': 'shortadjective', \
@@ -24,7 +20,7 @@ numb = {'sing': 'single', 'plur': 'plural', 'None': 'number_any'}
 #Fixd неизменяемое !!!!!
 cas = {'nomn':'nominative', 'gent':'genitive', 'datv':'dative', \
            'accs': 'accusative', 'ablt': 'instrumental', 'loct': 'prepositional',\
-          'None': 'case_any'}
+          'None': 'case_any', 'loc2': 'prepositional', 'gen2':'genitive'}
 
 st = {True:'true', False:'false'}
 #нет
@@ -45,14 +41,11 @@ tense = {'pres': 'present','past':'past', 'futr': 'future', \
 voice = {'actv':'active', 'pssv': 'passive', 'None':'voice_any'}
 
 
-columns_imp_feat = db.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'important_features' AND table_schema = 'public';")
-
-columns_morf = db.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'morf_characters_of_word' AND table_schema = 'public';")
 
 NUMBER_PARAMETRS = 13
 
 class Morf: # для хранения морфологических характеристик
-    names = set(['s_cl', 'animate', 'gender', 'number', 'case1', 'reflection', 'perfective',\
+    names = set(['s_cl', 'animate', 'gender', 'number', 'case_morf', 'reflection', 'perfective',\
             'transitive', 'person', 'tense', 'voice', 'degree', 'static'])
     def __init__(self, cl  = 'not_imp', an = 'not_imp', \
                  gen = 'not_imp', num = 'not_imp', \
@@ -64,7 +57,7 @@ class Morf: # для хранения морфологических харак�
         self.animate = an
         self.gender = gen
         self.number = num
-        self.case1 = cas
+        self.case_morf = cas
         self.reflection = ref
         self.perfective = perf
         self.transitive = trans
@@ -76,9 +69,8 @@ class Morf: # для хранения морфологических харак�
     def __eq__(self, other):
         if isinstance(other, Morf):
             return self.s_cl == other.s_cl and self.animate == other.animate and self.gender == other.gender and self.number == other.number and \
-                self.case1 == other.case1 and self.reflection == other.reflection and self.perfective == other.perfective and self.transitive == other.transitive and \
+                self.case_morf == other.case_morf and self.reflection == other.reflection and self.perfective == other.perfective and self.transitive == other.transitive and \
                 self.person == other.person and self.tense == other.tense and self.voice == other.voice and self.degree == other.degree and self.static == other.static
         return NotImplemented
     
     
-EUsedPrep = Enum("EUsedPrep", "noPrep, usedPrep")
