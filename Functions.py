@@ -1,4 +1,3 @@
-import postgresql
 from Types import *
 
 
@@ -34,7 +33,7 @@ def parseToMorf(text, curParse):
         curMorf.gender = gend[str(curParse.tag.gender)]
     curMorf.number = numb[str(curParse.tag.number)]
     if (str(curParse.tag.case) in cas):
-        curMorf.case1 = cas[str(curParse.tag.case)]
+        curMorf.case_morph = cas[str(curParse.tag.case)]
     else:
         print("wrong case", curParse.tag.case)
         return None
