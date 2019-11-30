@@ -9,12 +9,12 @@ con = psycopg2.connect(dbname='gpatterns', user='postgres',
                         password='postgres', host='localhost')
 cursor = con.cursor()
 
-m = parseToMorf("дождинка", morph.parse("дождинка")[0])
-a = dbInsertMorf(con, m)
+m = parseToMorph("дождинка", morph.parse("дождинка")[0])
+a = dbInsertMorph(con, m)
 print(a)
 
-m = parseToMorf("дождинка", morph.parse("дождинка")[0])
-a = dbFindMorf(con, m)
+m = parseToMorph("дождинка", morph.parse("дождинка")[0])
+a = dbFindMorph(con, m)
 print(a)
 
 w = 'лето'

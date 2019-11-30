@@ -44,7 +44,7 @@ voice = {'actv':'active', 'pssv': 'passive', 'None':'voice_any'}
 
 NUMBER_PARAMETRS = 13
 
-class Morf: # для хранения морфологических характеристик
+class Morph: # для хранения морфологических характеристик
     names = set(['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective',\
             'transitive', 'person', 'tense', 'voice', 'degree', 'static'])
     def __init__(self, cl  = 'not_imp', an = 'not_imp', \
@@ -67,7 +67,7 @@ class Morf: # для хранения морфологических харак�
         self.degree = deg
         self.static = stat
     def __eq__(self, other):
-        if isinstance(other, Morf):
+        if isinstance(other, Morph):
             return self.s_cl == other.s_cl and self.animate == other.animate and self.gender == other.gender and self.number == other.number and \
                 self.case_morph == other.case_morph and self.reflection == other.reflection and self.perfective == other.perfective and self.transitive == other.transitive and \
                 self.person == other.person and self.tense == other.tense and self.voice == other.voice and self.degree == other.degree and self.static == other.static
