@@ -5,7 +5,7 @@ def dbInsertWord(con, w):
     con.commit()
     ind = cursor.fetchall()
     cursor.close()
-    return [ind[0][0]]
+    return ind[0][0]
     
 def dbInsertMorph(con, m):
 # возвращает индекс, вставленного морфа
@@ -18,7 +18,7 @@ def dbInsertMorph(con, m):
     con.commit()
     ind = cursor.fetchall()
     cursor.close()
-    return [ind[0][0]]
+    return ind[0][0]
     
 def dbFindMorph(con, m):
 # здесь ответ - одно индекс !! Морфы все должны быть различны!!
@@ -51,11 +51,9 @@ def dbFindMorph(con, m):
         print("ОШИБКА: в базе есть два одинаковых морфа")
         return None
     else:
-        return [ans[0]]
+        return ans[0]
     
 def dbFindWord(con, w):
-# здесь ответ - может быть несколько разных номеров у одного слова
-# на всякий случай для семантики
     cursor = con.cursor()
     comand = "SELECT id FROM word WHERE " + \
         "name = %s;"
@@ -67,7 +65,7 @@ def dbFindWord(con, w):
     cursor.close()
     if len(ans) == 0:
         return None # нет такого морфа
-    return ans
+    return ans[0]
 
 def findOrInsertMorph(con, m):
     res = dbFindMorph(con, m)
