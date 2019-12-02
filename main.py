@@ -3,19 +3,20 @@ from Types import *
 from Functions import *
 import pymorphy2
 morph = pymorphy2.MorphAnalyzer()
-import postgresql
 import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import write_dot, graphviz_layout
+import psycopg2
+from enum import Enum
+EUsedPrep = Enum("EUsedPrep", "noPrep, usedPrep")
+
 
 class GPattern:
-    def __init__(self, l = -1, textWord = "", depWordConstr = None, p = "", m = 0.0):
+    def __init__(self, l = -1, textWord = "", nw = "", p = "", m = 0.0):
         self.level = l
         self.dependentWord = textWord
-        if (depWordConstr == None):
-            self.dependentWordConstraints = []
-        else:
-            self.dependentWordConstraints = copy.deepcopy(depWordConstr)
+        self.dependentWordConstraints = [] # массив лямбда-функций ограничений на морф
+        self.normalWord = nw
         self.mark = m
         self.prep = p
         self.info = ""# ????
@@ -27,129 +28,135 @@ class GPatternList:
         self.secondLevel = []
         self.thirdLevel = []
 
-def extractFirstLevel(word, curMorph, db):
-    s1 = "SELECT number_morph FROM morph_characters_of_word WHERE " + \
-        "s_cl = \'" + str(curMorph.s_cl).split('.')[1] + "\' AND " + \
-        "animate = \'" + str(curMorph.animate).split('.')[1] + "\' AND " + \
-        "gender = \'" + str(curMorph.gender).split('.')[1] + "\' AND " + \
-        "number = \'" + str(curMorph.number).split('.')[1] + "\' AND " + \
-        "case1 = \'" + str(curMorph.case1).split('.')[1] + "\' AND " + \
-        "reflection = \'" + str(curMorph.reflection).split('.')[1] + "\' AND " + \
-        "perfective = \'" + str(curMorph.perfective).split('.')[1] + "\' AND " + \
-        "transitive = \'" + str(curMorph.transitive).split('.')[1] + "\' AND " + \
-        "person = \'" + str(curMorph.person).split('.')[1] + "\' AND " + \
-        "tense = \'" + str(curMorph.tense).split('.')[1] + "\' AND " + \
-        "voice = \'" + str(curMorph.voice).split('.')[1] + "\' AND " + \
-        "degree = \'" + str(curMorph.degree).split('.')[1] + "\' AND " + \
-        "static = \'" + str(curMorph.static) + "\'"
-    # s1 - получение номера морфа(один морф в идеале)
-    s2 = "WITH morph AS (" + s1 + "), " + \
-        "num_models AS (SELECT model_1_level.number_model FROM model_1_level, morph WHERE ref_to_main_morph = morph.number_morph), " + \
-        "mod AS (SELECT model_1_level.* FROM model_1_level, num_models WHERE model_1_level.number_model = num_models.number_model), " + \
-        "prop AS (SELECT number_model, morph_characters_of_word.* FROM mod, morph_characters_of_word WHERE mod.ref_to_dep_morph = morph_characters_of_word.number_morph), " + \
-        "imp AS (SELECT number_model, important_features.* FROM mod, important_features WHERE mod.imp_feat_dep = important_features.number_imp_feat), " + \
-        "pr AS (SELECT prep_text, number_model FROM prep, mod WHERE mod.prep = prep.number_prep) " + \
-        "SELECT mod.mark, pr.prep_text, imp.*, prop.* FROM imp, prop, pr, mod WHERE imp.number_model = prop.number_model AND imp.number_model = mod.number_model AND pr.number_model = mod.number_model;"
-    #print(s2)
-    res = db.query(s2)
+
+def extractFirstLevel(word, curMorph, con):
+    s0 = "SELECT id FROM morph_constraints WHERE " + \
+         "s_cl = %s AND " + \
+         "(animate = %s OR animate = \'not_imp\') AND " + \
+         "(gender = %s OR gender = \'not_imp\')  AND " + \
+         "(number = %s OR number = \'not_imp\') AND " + \
+         "(case_morph = %s OR case_morph = \'not_imp\') AND " + \
+         "(reflection = %s OR reflection = \'not_imp\') AND " + \
+         "(perfective = %s OR perfective = \'not_imp\') AND " + \
+         "(transitive = %s OR transitive = \'not_imp\') AND " + \
+         "(person = %s OR person = \'not_imp\') AND " + \
+         "(tense = %s OR tense = \'not_imp\') AND " + \
+         "(voice = %s OR voice = \'not_imp\') AND " + \
+         "(degree = %s OR degree = \'not_imp\') AND " + \
+         "(static = %s OR static = \'not_imp\')"
+
+    # получение морфа
+    # s1 - получение номера главного слова(одно слово в идеале)
+    s2 = "SELECT * FROM gpattern_1_level WHERE main_morph IN (" + s0 + ")"
+    s3 = "SELECT  mark, morph_constraints.* FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph;"
+    cursor = con.cursor()
+    params = (curMorph.s_cl, curMorph.animate, curMorph.gender, curMorph.number, \
+              curMorph.case_morph, curMorph.reflection, curMorph.perfective, curMorph.transitive, \
+              curMorph.person, curMorph.tense, curMorph.voice, curMorph.degree, curMorph.static)
+    cursor.execute(s3, params)
+    ans = cursor.fetchall()
     firLev = []
-    shiftImpFeat = 4
-    shiftProp = 19
-    #print(res)
-    for curConstr in res:
+    for cur in ans:
         curPatt = GPattern(1)
-        oneModelConstr = []
-        for j in range(0, 13): #13 - количество свойств в Morph
-            if (curConstr[shiftImpFeat + j] == True):
-                oneModelConstr.append(curConstr[shiftProp + j])
-        curPatt.dependentWordConstraints += oneModelConstr
-        curPatt.mark = curConstr[0]
-        curPatt.prep = curConstr[1]
+        curConstr = []
+        for j in range(2, 15):  # 13 - количество свойств в Morph, 1 - индекс morph, он не нужен
+            if cur[j] != 'not_imp':
+                curProp = Morph.names[j]
+                curConstr.append(lambda m: getattr(m, curProp) == cur[j])
+
+        curPatt.dependentWordConstraints = curConstr
+        curPatt.mark = cur[0]
+        curPatt.prep = None
         firLev.append(curPatt)
-    #print(firLev)
+    cursor.close()
     return firLev
 
-def extractSecondLevel(word, curMorph, db):
-    s0 = "SELECT number_morph FROM morph_characters_of_word WHERE " + \
-        "s_cl = \'" + str(curMorph.s_cl).split('.')[1] + "\' AND " + \
-        "animate = \'" + str(curMorph.animate).split('.')[1] + "\' AND " + \
-        "gender = \'" + str(curMorph.gender).split('.')[1] + "\' AND " + \
-        "number = \'" + str(curMorph.number).split('.')[1] + "\' AND " + \
-        "case1 = \'" + str(curMorph.case1).split('.')[1] + "\' AND " + \
-        "reflection = \'" + str(curMorph.reflection).split('.')[1] + "\' AND " + \
-        "perfective = \'" + str(curMorph.perfective).split('.')[1] + "\' AND " + \
-        "transitive = \'" + str(curMorph.transitive).split('.')[1] + "\' AND " + \
-        "person = \'" + str(curMorph.person).split('.')[1] + "\' AND " + \
-        "tense = \'" + str(curMorph.tense).split('.')[1] + "\' AND " + \
-        "voice = \'" + str(curMorph.voice).split('.')[1] + "\' AND " + \
-        "degree = \'" + str(curMorph.degree).split('.')[1] + "\' AND " + \
-        "static = \'" + str(curMorph.static) + "\'"
-    #получение морфа
-    s1 = "WITH number_morph AS (" + s0 +"), number_word AS (SELECT number_word FROM word, number_morph  WHERE word.word_text = \'" + word + "\' AND word.ref_to_morph = number_morph.number_morph),"
-    # s1 - получение номера главного слова(одно слово в идеале)
-    s2 = s1 + \
-    "mod AS (SELECT * FROM model_2_level, number_word WHERE model_2_level.ref_to_main_word = number_word.number_word), prop AS (SELECT number_model, morph_characters_of_word.* FROM mod, morph_characters_of_word WHERE mod.ref_to_dep_morph = morph_characters_of_word.number_morph), imp AS (SELECT number_model, important_features.* FROM mod, important_features WHERE mod.imp_feat_dep = important_features.number_imp_feat), pr AS (SELECT prep_text, number_model FROM prep, mod WHERE mod.prep = prep.number_prep) SELECT mod.mark, pr.prep_text, imp.*, prop.* FROM imp, prop, pr, mod WHERE imp.number_model = prop.number_model AND imp.number_model = mod.number_model AND pr.number_model = mod.number_model;"
+def extractSecondLevel(word, curMorph, con):
+    s0 = "SELECT id FROM morph_constraints WHERE " + \
+         "s_cl = %s AND " + \
+         "(animate = %s OR animate = \'not_imp\') AND " + \
+         "(gender = %s OR gender = \'not_imp\')  AND " + \
+         "(number = %s OR number = \'not_imp\') AND " + \
+         "(case_morph = %s OR case_morph = \'not_imp\') AND " + \
+         "(reflection = %s OR reflection = \'not_imp\') AND " + \
+         "(perfective = %s OR perfective = \'not_imp\') AND " + \
+         "(transitive = %s OR transitive = \'not_imp\') AND " + \
+         "(person = %s OR person = \'not_imp\') AND " + \
+         "(tense = %s OR tense = \'not_imp\') AND " + \
+         "(voice = %s OR voice = \'not_imp\') AND " + \
+         "(degree = %s OR degree = \'not_imp\') AND " + \
+         "(static = %s OR static = \'not_imp\')"
 
-    #print(s2)
-    res = db.query(s2)
+    # получение морфа
+    # s1 - получение номера главного слова(одно слово в идеале)
+    s2 = "SELECT * FROM gpattern_2_level WHERE main_morph IN (" + s0 + ") AND gpattern_2_level.main_word = " + \
+        "(SELECT id FROM word WHERE name = %s)"
+    s3 = "SELECT  mark, morph_constraints.* FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph;"
+    cursor = con.cursor()
+    params = (curMorph.s_cl, curMorph.animate, curMorph.gender, curMorph.number, \
+              curMorph.case_morph, curMorph.reflection, curMorph.perfective, curMorph.transitive, \
+              curMorph.person, curMorph.tense, curMorph.voice, curMorph.degree, curMorph.static, word)
+    cursor.execute(s3, params)
+    ans = cursor.fetchall()
     secLev = []
-    shiftImpFeat = 4
-    shiftProp = 19
-    #print(res)
-    for curConstr in res:
-        curPatt = GPattern(2)
-        oneModelConstr = []
-        for j in range(0, 13): #13 - количество свойств в Morph
-            if (curConstr[shiftImpFeat + j] == True):
-                oneModelConstr.append(curConstr[shiftProp + j])
-        curPatt.dependentWordConstraints += oneModelConstr
-        curPatt.mark = curConstr[0]
-        curPatt.prep = curConstr[1]
+    for cur in ans:
+        curPatt = GPattern(1)
+        curConstr = []
+        for j in range(2, 15):  # 13 - количество свойств в Morph
+            if cur[j] != 'not_imp':
+                curProp = Morph.names[j]
+                curConstr.append(lambda m: getattr(m, curProp) == cur[j])
+
+        curPatt.dependentWordConstraints = curConstr
+        curPatt.mark = cur[0]
+        curPatt.prep = None
         secLev.append(curPatt)
-    #print(secLev)
+    cursor.close()
     return secLev
 
-def extractThirdLevel(word, curMorph, db):
-    s0 = "SELECT number_morph FROM morph_characters_of_word WHERE " + \
-        "s_cl = \'" + str(curMorph.s_cl).split('.')[1] + "\' AND " + \
-        "animate = \'" + str(curMorph.animate).split('.')[1] + "\' AND " + \
-        "gender = \'" + str(curMorph.gender).split('.')[1] + "\' AND " + \
-        "number = \'" + str(curMorph.number).split('.')[1] + "\' AND " + \
-        "case1 = \'" + str(curMorph.case1).split('.')[1] + "\' AND " + \
-        "reflection = \'" + str(curMorph.reflection).split('.')[1] + "\' AND " + \
-        "perfective = \'" + str(curMorph.perfective).split('.')[1] + "\' AND " + \
-        "transitive = \'" + str(curMorph.transitive).split('.')[1] + "\' AND " + \
-        "person = \'" + str(curMorph.person).split('.')[1] + "\' AND " + \
-        "tense = \'" + str(curMorph.tense).split('.')[1] + "\' AND " + \
-        "voice = \'" + str(curMorph.voice).split('.')[1] + "\' AND " + \
-        "degree = \'" + str(curMorph.degree).split('.')[1] + "\' AND " + \
-        "static = \'" + str(curMorph.static) + "\'"
-    #получение морфа
-    s1 = "WITH number_morph AS (" + s0 +"), number_word AS (SELECT number_word FROM word, number_morph  WHERE word.word_text = \'" + word + "\' AND word.ref_to_morph = number_morph.number_morph),"
-    # s1 - получение номера главного слова(одно слово в идеале)
-    s2 = s1 + \
-    "mod AS (SELECT * FROM model_3_level, number_word WHERE model_3_level.ref_to_main_word = number_word.number_word), w AS (SELECT number_model, word.* FROM mod, word WHERE mod.ref_to_dep_word = word.number_word), imp AS (SELECT number_model, important_features.* FROM mod, important_features WHERE mod.imp_feat_dep = important_features.number_imp_feat), pr AS (SELECT prep_text, number_model FROM prep, mod WHERE mod.prep = prep.number_prep), prop AS (SELECT * FROM morph_characters_of_word, w WHERE morph_characters_of_word.number_morph = w.ref_to_morph) SELECT mod.mark, pr.prep_text, imp.*, prop.* FROM imp, w, pr, mod, prop WHERE imp.number_model = w.number_model AND imp.number_model = mod.number_model AND pr.number_model = mod.number_model AND prop.number_model = mod.number_model;"
+def extractThirdLevel(word, curMorph, con):
+    s0 = "SELECT id FROM morph_constraints WHERE " + \
+         "s_cl = %s AND " + \
+         "(animate = %s OR animate = \'not_imp\') AND " + \
+         "(gender = %s OR gender = \'not_imp\')  AND " + \
+         "(number = %s OR number = \'not_imp\') AND " + \
+         "(case_morph = %s OR case_morph = \'not_imp\') AND " + \
+         "(reflection = %s OR reflection = \'not_imp\') AND " + \
+         "(perfective = %s OR perfective = \'not_imp\') AND " + \
+         "(transitive = %s OR transitive = \'not_imp\') AND " + \
+         "(person = %s OR person = \'not_imp\') AND " + \
+         "(tense = %s OR tense = \'not_imp\') AND " + \
+         "(voice = %s OR voice = \'not_imp\') AND " + \
+         "(degree = %s OR degree = \'not_imp\') AND " + \
+         "(static = %s OR static = \'not_imp\')"
 
-    #print(s2)
-    res = db.query(s2)
-    thLev = []
-    shiftImpFeat = 4
-    shiftProp = 18
-    #print(res)
-    for curConstr in res:
-        curPatt = GPattern(3)
-        oneModelConstr = []
-        for j in range(0, 13): #13 - количество свойств в Morph
-            if (curConstr[shiftImpFeat + j] == True):
-                oneModelConstr.append(curConstr[shiftProp + j])
-        curPatt.dependentWordConstraints += oneModelConstr
-        curPatt.mark = curConstr[0]
-        curPatt.prep = curConstr[1]
-        curPatt.dependentWord = curConstr[34]
-        #print(curPatt.dependentWord)
-        thLev.append(curPatt)
-    #print(thLev)
-    return thLev
+    # получение морфа
+    # s1 - получение номера главного слова(одно слово в идеале)
+    s2 = "SELECT * FROM gpattern_3_level WHERE main_morph IN (" + s0 + ") AND gpattern_3_level.main_word = " + \
+        "(SELECT id FROM word WHERE name = %s)"
+    s3 = "SELECT  mark, morph_constraints.*, word.name FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph " + \
+    "JOIN word ON dep_word = word.id;"
+    cursor = con.cursor()
+    params = (curMorph.s_cl, curMorph.animate, curMorph.gender, curMorph.number, \
+              curMorph.case_morph, curMorph.reflection, curMorph.perfective, curMorph.transitive, \
+              curMorph.person, curMorph.tense, curMorph.voice, curMorph.degree, curMorph.static, word)
+    cursor.execute(s3, params)
+    ans = cursor.fetchall()
+    thirdLev = []
+    for cur in ans:
+        curPatt = GPattern(1)
+        curConstr = []
+        for j in range(2, 15):  # 13 - количество свойств в Morph
+            if cur[j] != 'not_imp':
+                curProp = Morph.names[j]
+                curConstr.append(lambda m: getattr(m, curProp) == cur[j])
+        curPatt.normalWord = cur[15]
+        curPatt.dependentWordConstraints = curConstr
+        curPatt.mark = cur[0]
+        curPatt.prep = None
+        thirdLev.append(curPatt)
+    cursor.close()
+    return thirdLev
 
 class Word:
     def morphParse(self):
@@ -157,15 +164,18 @@ class Word:
         for curParse in p:
             m = parseToMorph(self.word, curParse)
             self.morph.append(m)
-            if (m.s_cl == Es_cl.preposition):
+            self.normalWord.append(curParse.normal_form)
+            if (m.s_cl == 'preposition'):
                 self.canPrep = True
 
-    def getGPatterns(self, db):
-        for curMorph in self.morph:
+    def getGPatterns(self, con):
+        for i in range(len(self.morph)):
+            curMorph = self.morph[i]
+            curNormal = self.normalWord[i]
             curPatt = GPatternList()
-            curFirst = extractFirstLevel(self.word, curMorph, db)
-            curSec = extractSecondLevel(self.word, curMorph, db)
-            curThird = extractThirdLevel(self.word, curMorph, db)
+            curFirst = extractFirstLevel(curNormal, curMorph, con)
+            curSec = extractSecondLevel(curNormal, curMorph, con)
+            curThird = extractThirdLevel(curNormal, curMorph, con)
             curPatt.firstLevel += curFirst
             curPatt.secondLevel += curSec
             curPatt.thirdLevel += curThird
@@ -173,7 +183,7 @@ class Word:
 
     def __init__(self, name = "", number = -1):
         self.word = name  # у Одинцева Word
-
+        self.normalWord = [] # список начальных форм слов, соответствует morph(вместе заполняются)
         self.morph = []  # список объектов типа Morph
 
         # список морфологических характеристик для всех вариантов морф. анализа
@@ -227,25 +237,23 @@ class ParsePoint:
 
     def checkMorph(self, morph, constraints):
         en = 0
-        res = True
-        for constr in range(len(constraints)):
-            while (not (constraints[constr] in Enums[en]._member_names_)):
-                en += 1
-            nameEnum = Enums[en].__name__[1:].replace("case", "case1")
-            if (str(morph.__dict__[nameEnum]) != Enums[en].__name__ + "." + constraints[constr]):
-                res = False
-                break
-        return res
+        for curCheckFun in constraints:
+            if not curCheckFun(morph):
+                return False
+        return True
 
     def checkWord(self, depWord, gPattern): # на вход - потенциальное зависимое слово(или потенциальный предлог), модель управления
 #  в какой морф.форме может быть зав.словом, None - не может быть
         constr = gPattern.dependentWordConstraints
         ans = 0
-        if (gPattern.level == 3 and gPattern.dependentWord != depWord.word): # у 3 уровня не совпало слово
+        if (gPattern.level == 3 and gPattern.normalWord != depWord.norm): # у 3 уровня не совпало слово
             return None
-        for morph in depWord.morph:
-            if (self.checkMorph(morph, constr)):
-                return morph
+        for i in range(len(depWord.morph)):
+            morph = depWord.morph[i]
+            nw = depWord.normalWord[i]
+            if gPattern.level != 3 or (gPattern.level == 3 and gPattern.normalWord == nw):
+                if (self.checkMorph(morph, constr)):
+                    return morph
         return None
 
 
@@ -341,7 +349,7 @@ class ParsePoint:
             for i in range(len(self.parsePointWordList)):
                 curPointWord = self.parsePointWordList[i]
                 for curMorph in curPointWord.word.morph:
-                    if curMorph.s_cl == Es_cl.verb:
+                    if curMorph.s_cl == 'verb':
                         newParsePoint = copy.deepcopy(self)
                         newParsePoint.parsePointWordList[i].parsed = True
                         newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
@@ -351,7 +359,7 @@ class ParsePoint:
             for i in range(len(self.parsePointWordList)):
                 curPointWord = self.parsePointWordList[i]
                 for curMorph in curPointWord.word.morph:
-                    if curMorph.s_cl == Es_cl.noun and curMorph.case1 == Ecase.nominative:
+                    if curMorph.s_cl == 'noun' and curMorph.case_morph == 'nominative':
                         newParsePoint = copy.deepcopy(self)
                         newParsePoint.parsePointWordList[i].parsed = True
                         newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
@@ -462,9 +470,9 @@ class Sentence:
         for curWord in self.wordList:
             curWord.morphParse()
 
-    def getGPatterns(self, db):
+    def getGPatterns(self, con):
         for curWord in self.wordList:
-            curWord.getGPatterns(db)
+            curWord.getGPatterns(con)
 
     def getRootParsePoint(self):
         self.rootPP = ParsePoint()
@@ -489,16 +497,16 @@ class Sentence:
     
 # проверка связности - считаем, сколько слов в связном дереве, если = кол-ву слов, то все ок
 # на вход - res(т.е. bestParsePoint)
-    def countDependent(curParsePoint, firstWordIndex):
+    def countDependent(self, curParsePoint, firstWordIndex):
         newParsePointWord = curParsePoint.parsePointWordList[firstWordIndex]
         count = 1
         for curModel in newParsePointWord.usedGp:
             depWord1 = curModel.depWord
             print(depWord1.word)
-            count +=  countDependent(curParsePoint, depWord1.numberInSentence)
+            count += self.countDependent(curParsePoint, depWord1.numberInSentence)
         return count
     def checkConnectivity(self, curParsePoint): # параметр - предложение
-        return len(self.wordList) == countDependent(curParsePoint, self.firstParseWordsIndices[0])
+        return len(self.wordList) == self.countDependent(curParsePoint, self.firstParseWordsIndices[0])
     
     def sintParse(self, needTrace = False):
         if (needTrace):
@@ -542,14 +550,19 @@ class Sentence:
             return (bestParsePoint, tracePoints)
         return (bestParsePoint)
 
-def parse(db, str1, needTrace = False):
+def parse(con, str1, needTrace = False):
         s = Sentence()
         s.setString(str1)
         s.morphParse()
-        s.getGPatterns(db)
+        s.getGPatterns(con)
         res = s.sintParse(needTrace)
         if (needTrace):
             res[0].visualizate(s.firstParseWordsIndices)
         else:
             res.visualizate(s.firstParseWordsIndices)
         return res
+
+con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                        password='postgres', host='localhost')
+
+a1 = parse(con, "Просит бури.", True)

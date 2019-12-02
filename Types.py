@@ -45,8 +45,8 @@ voice = {'actv':'active', 'pssv': 'passive', 'None':'voice_any'}
 NUMBER_PARAMETRS = 13
 
 class Morph: # для хранения морфологических характеристик
-    names = set(['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective',\
-            'transitive', 'person', 'tense', 'voice', 'degree', 'static'])
+    names = ['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective',\
+            'transitive', 'person', 'tense', 'voice', 'degree', 'static']
     def __init__(self, cl  = 'not_imp', an = 'not_imp', \
                  gen = 'not_imp', num = 'not_imp', \
                  cas = 'not_imp', ref = 'not_imp',\
