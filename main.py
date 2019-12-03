@@ -7,9 +7,6 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 import psycopg2
-from enum import Enum
-EUsedPrep = Enum("EUsedPrep", "noPrep, usedPrep")
-
 
 class GPattern:
     def __init__(self, l = -1, textWord = "", nw = "", p = "", m = 0.0):
@@ -18,7 +15,6 @@ class GPattern:
         self.dependentWordConstraints = [] # массив лямбда-функций ограничений на морф
         self.normalWord = nw
         self.mark = m
-        self.prep = p
         self.info = ""# ????
 
 
@@ -68,7 +64,6 @@ def extractFirstLevel(word, curMorph, con):
 
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
-        curPatt.prep = None
         firLev.append(curPatt)
     cursor.close()
     return firLev
@@ -113,7 +108,6 @@ def extractSecondLevel(word, curMorph, con):
 
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
-        curPatt.prep = None
         secLev.append(curPatt)
     cursor.close()
     return secLev
@@ -159,7 +153,6 @@ def extractThirdLevel(word, curMorph, con):
         curPatt.normalWord = cur[15]
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
-        curPatt.prep = None
         thirdLev.append(curPatt)
     cursor.close()
     return thirdLev
@@ -171,8 +164,7 @@ class Word:
             m = parseToMorph(self.word, curParse)
             self.morph.append(m)
             self.normalWord.append(curParse.normal_form)
-            if (m.s_cl == 'preposition'):
-                self.canPrep = True
+
 
     def getGPatterns(self, con):
         for i in range(len(self.morph)):
@@ -195,7 +187,6 @@ class Word:
         # список морфологических характеристик для всех вариантов морф. анализа
         self.gPatterns = []  # список из GPatternList, i элемент - для i morph
         # с помощью морф.анализатора заполняем morph, с помощью базы - GPatterns
-        self.canPrep = False # может ли слово быть использовано, как предлог
         self.numberInSentence = number
 
 class Gp:
@@ -210,7 +201,6 @@ class ParsePointWord:
         self.word = Word()
         self.parsed = False
         self.usedMorphAnswer = Morph()
-        self.isUsedPrep = EUsedPrep.noPrep
         self.usedGp = []#типа Gp
 
 class ParsePoint:
@@ -264,75 +254,53 @@ class ParsePoint:
 
 
     def rightMove(self, mainPPWord, gPatternToApply):
-        numberUsedPrep = -1  # -1 - такого нет,  проверяем, что данный предлог встретился перед! зависимым словом Предполагаем, что данный предлог должен быть сама близким к зависимому из возможных
-        # Шел с человеком с зонтом(человек с зонтом, т.к. иначе - непроективная конструкция) Важно, чтобы к зонту относилось второе с
 
         for numberDep in range(mainPPWord + 1, len(self.parsePointWordList),1):
-            if (self.parsePointWordList[numberDep].parsed and self.parsePointWordList[numberDep].isUsedPrep == EUsedPrep.noPrep):
+            if (self.parsePointWordList[numberDep].parsed):
                 if (self.checkInderectDependency(mainPPWord, numberDep) == False):
                     break
             else:
                 depWord = self.parsePointWordList[numberDep].word
                 morphForm = self.checkWord(depWord, gPatternToApply)
-                if (morphForm != None and numberUsedPrep != -1 ):  # если уже был предлог, и данное i-слово удовлетворяет требованиям зависимости модели
-                    return (True, numberUsedPrep, numberDep, morphForm)
-                if (morphForm != None and gPatternToApply.prep == "None"):
-                    return (True, None, numberDep, morphForm)
-                if (depWord.canPrep and depWord.word == gPatternToApply.prep):
-                    numberUsedPrep = numberDep #рассматриваемое слово может быть использовано, как предлог
-        return (False, None, None, None)
+                if (morphForm != None):
+                    return (True, numberDep, morphForm)
+        return (False, None, None)
 
     def leftMove(self, mainPPWord, gPatternToApply):
         # Шел с человеком с зонтом(человек с зонтом, т.к. иначе - непроективная конструкция) Важно, чтобы к зонту относилось второе с
 # здесь сложнее, для каждого потенциального зависимого слова(которое уже подтвердили, что модель подходит), ищем, есть ли предлог слева..... - это тааак долго
-        numbersPreps = [] # массив,в котором хранятся номера потенциальных предлогов(который нужен в модели управления )
-        if (gPatternToApply.prep != "None"):
-            for numberWord in range(0, mainPPWord):
-                curWord = self.parsePointWordList[numberWord].word
-                if (curWord.word == gPatternToApply.prep and curWord.canPrep):
-                    numbersPreps.append(numberWord)
+
         for numberDep in range(mainPPWord - 1, -1 , -1):
-            if (self.parsePointWordList[numberDep].parsed and self.parsePointWordList[numberDep].isUsedPrep == EUsedPrep.noPrep):
+            if (self.parsePointWordList[numberDep].parsed):
                 if (self.checkInderectDependency(mainPPWord, numberDep) == False):
                     break
             else:
                 depWord = self.parsePointWordList[numberDep].word
-                morphForm = self.checkWord(depWord, gPatternToApply) # здесь нас не интересует maybePrep, т.к. предлог ищем слева
+                morphForm = self.checkWord(depWord, gPatternToApply)
                 if (morphForm != None):  # данное i-слово удовлетворяет требованиям зависимости модели
-                    if (gPatternToApply.prep == "None"):
-                        return (True, None, numberDep, morphForm)
-                    if (numbersPreps[0] < numberDep): # есть предлоги(нужные) слева от потенц.зависимого
-                        leftPrep = -1 # ищем самый правый из предлогов, которые слева от потенц.зависимого
-                        for num in numbersPreps:
-                            if (num < numberDep):
-                                leftPrep = num
-                            else:
-                                break # Так как номера предлогов отсортированы по возрастанию
-                        return (True, leftPrep, numberDep, morphForm)
-        return (False, None, None, None)
+                    return (True, numberDep, morphForm)
+        return (False, None, None)
+        return (False, None, None)
 
     def isApplicable (self, mainPPWord, gPatternToApply): # где проверка предлогов???????
     #mainPPWord - номер главного!!!
         if (ParsePoint.directForIsApplicable > 0):
-            (find, numberUsedPrep, numberDep, morphForm) = self.rightMove(mainPPWord, gPatternToApply)
+            (find, numberDep, morphForm) = self.rightMove(mainPPWord, gPatternToApply)
             ParsePoint.directForIsApplicable = -ParsePoint.directForIsApplicable
             if (find):
-                return (True, numberUsedPrep, numberDep, morphForm)
+                return (True, numberDep, morphForm)
             return self.leftMove(mainPPWord, gPatternToApply)
         else:
-            (find, numberUsedPrep, numberDep, morphForm) = self.leftMove(mainPPWord, gPatternToApply)
+            (find, numberDep, morphForm) = self.leftMove(mainPPWord, gPatternToApply)
             ParsePoint.directForIsApplicable = -ParsePoint.directForIsApplicable
             if (find):
-                return (True, numberUsedPrep, numberDep, morphForm)
+                return (True, numberDep, morphForm)
             return self.rightMove(mainPPWord, gPatternToApply)
 
 
 
-    def apply (self, mainPPWord, dependingPPWord, prepNumber, usedMorphAnswer, gPatternToApply):
+    def apply (self, mainPPWord, dependingPPWord, usedMorphAnswer, gPatternToApply):
         newParsePoint = copy.deepcopy(self)
-        if (prepNumber != None):
-            newParsePoint.parsePointWordList[prepNumber].parsed = True
-            newParsePoint.parsePointWordList[prepNumber].isUsedPrep = EUsedPrep.usedPrep
         newParsePoint.parsePointWordList[dependingPPWord].parsed = True
         newParsePoint.parsePointWordList[dependingPPWord].usedMorphAnswer = usedMorphAnswer
         newGp = Gp()
@@ -375,7 +343,6 @@ class ParsePoint:
             bestMainWord = Word()
             bestDepWord = Word()
             usedDepMorph = Morph()
-            bestPrep = Word()
             bestModel = Gp()
             bestModelMark = 0
             for i in parsed:
@@ -389,16 +356,15 @@ class ParsePoint:
                         break
                 if (models != None):
                     for curModel in (models.thirdLevel + models.secondLevel + models.firstLevel):
-                        (canApply, prep, depWord, morphDepWord) = self.isApplicable(i, curModel)
+                        (canApply, depWord, morphDepWord) = self.isApplicable(i, curModel)
                         if (canApply and curModel.mark > bestModelMark): #!!!!!
-                            bestPrep = prep
                             bestModelMark = curModel.mark
                             bestModel = copy.deepcopy(curModel)
                             bestMainWord = i
                             bestDepWord = depWord
                             usedDepMorph = morphDepWord
             if (bestModelMark != 0):
-                newParsePoint = self.apply(bestMainWord, bestDepWord, bestPrep, usedDepMorph, bestModel)
+                newParsePoint = self.apply(bestMainWord, bestDepWord, usedDepMorph, bestModel)
                 self.childParsePoint.append(newParsePoint)
                 return (newParsePoint, False, None)
             print("No model")
@@ -444,6 +410,7 @@ class ParsePoint:
         plt.scatter(max_x + 0.1, 0.0, s = 1, c = 'white')
         #pos=graphviz_layout(G1, prog='dot')
         nx.draw(G1, pos, with_labels = True, node_size=1, horizontalalignment='center', verticalalignment='top', font_size = 20)
+        plt.show()
 class Sentence:
     def __init__(self):
         self.inputStr = ""
@@ -571,4 +538,5 @@ def parse(con, str1, needTrace = False):
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                         password='postgres', host='localhost')
 
-a1 = parse(con, "Просит девочка.", True)
+a1 = parse(con, "Просит бури.", True)
+print(a1)
