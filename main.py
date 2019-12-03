@@ -59,10 +59,12 @@ def extractFirstLevel(word, curMorph, con):
     for cur in ans:
         curPatt = GPattern(1)
         curConstr = []
-        for j in range(2, 15):  # 13 - количество свойств в Morph, 1 - индекс morph, он не нужен
+        print("--------------")
+        for j in range(2, 15):  # 13 - количество свойств в Morph
             if cur[j] != 'not_imp':
-                curProp = Morph.names[j]
-                curConstr.append(lambda m: getattr(m, curProp) == cur[j])
+                curProp = Morph.names[j - 2]
+                curConstr.append(((lambda m, cP, val: getattr(m, cP) == val), (curProp, cur[j])))
+                print(curProp, cur[j])
 
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
@@ -102,10 +104,12 @@ def extractSecondLevel(word, curMorph, con):
     for cur in ans:
         curPatt = GPattern(1)
         curConstr = []
+        print("-------------")
         for j in range(2, 15):  # 13 - количество свойств в Morph
             if cur[j] != 'not_imp':
-                curProp = Morph.names[j]
-                curConstr.append(lambda m: getattr(m, curProp) == cur[j])
+                curProp = Morph.names[j - 2]
+                curConstr.append(((lambda m, cP, val: getattr(m, cP) == val), (curProp, cur[j])))
+                print(curProp, cur[j])
 
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
@@ -146,10 +150,12 @@ def extractThirdLevel(word, curMorph, con):
     for cur in ans:
         curPatt = GPattern(1)
         curConstr = []
+        print("-----------------")
         for j in range(2, 15):  # 13 - количество свойств в Morph
             if cur[j] != 'not_imp':
-                curProp = Morph.names[j]
-                curConstr.append(lambda m: getattr(m, curProp) == cur[j])
+                curProp = Morph.names[j - 2]
+                curConstr.append(((lambda m, cP, val: getattr(m, cP) == val), (curProp, cur[j])))
+                print(curProp, cur[j])
         curPatt.normalWord = cur[15]
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
@@ -236,9 +242,11 @@ class ParsePoint:
         return True # ПЕРЕПИСАТЬ!!!!!
 
     def checkMorph(self, morph, constraints):
-        en = 0
-        for curCheckFun in constraints:
-            if not curCheckFun(morph):
+        for cur in constraints:
+            curCheckFun = cur[0]
+            curProperty = cur[1][0]
+            val = cur[1][1]
+            if not curCheckFun(morph, curProperty, val):
                 return False
         return True
 
@@ -246,8 +254,6 @@ class ParsePoint:
 #  в какой морф.форме может быть зав.словом, None - не может быть
         constr = gPattern.dependentWordConstraints
         ans = 0
-        if (gPattern.level == 3 and gPattern.normalWord != depWord.norm): # у 3 уровня не совпало слово
-            return None
         for i in range(len(depWord.morph)):
             morph = depWord.morph[i]
             nw = depWord.normalWord[i]
@@ -565,4 +571,4 @@ def parse(con, str1, needTrace = False):
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                         password='postgres', host='localhost')
 
-a1 = parse(con, "Просит бури.", True)
+a1 = parse(con, "Просит девочка.", True)
