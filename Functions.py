@@ -1,104 +1,84 @@
-import postgresql
 from Types import *
 
 
 
-def parseToMorf(text, curParse):
-    curMorf = Morf()
+def parseToMorph(text, curParse):
+    curMorph = Morph()
    # print(curParse)
    # print(curParse.tag)
     if (curParse.normal_form == "себя"):
-        curMorf.s_cl = Es_cl.reflexivepronoun
+        curMorph.s_cl = 'reflexivepronoun'
     elif (curParse.normal_form in ['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они']):
-        curMorf.s_cl = Es_cl.personalpronoun
+        curMorph.s_cl = 'personalpronoun'
     elif ('Impe' in curParse.tag):
-        curMorf.s_cl = Es_cl.unpersonalverb
+        curMorph.s_cl = 'unpersonalverb'
     elif ('Mult' in curParse.tag):
-        curMorf.s_cl = Es_cl.frequentativeverb
+        curMorph.s_cl = 'frequentativeverb'
     elif ('Anum' in curParse.tag):
-        curMorf.s_cl = Es_cl.numberordinal # проверить!!!!
+        curMorph.s_cl = 'numberordinal' # проверить!!!!
     elif (curParse.normal_form == "один"):
-        curMorf.s_cl = Es_cl.numberone
+        curMorph.s_cl = 'numberone'
     elif (curParse.normal_form in ['два', 'оба', 'полтора']):
-        curMorf.s_cl = Es_cl.numbertwo
+        curMorph.s_cl = 'numbertwo'
     elif (curParse.normal_form in ['три', 'четыре', 'сколько', 'несколько', 'столько', 'много', 'немного'] or 'Coll' in curParse.tag):
-        curMorf.s_cl = Es_cl.numberthree
+        curMorph.s_cl = 'numberthree'
     else:
-        curMorf.s_cl = cl[str(curParse.tag.POS)]
+        curMorph.s_cl = cl[str(curParse.tag.POS)]
     
     #print(curParse.tag.POS)#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    curMorf.animate = anim[str(curParse.tag.animacy)]
+    curMorph.animate = anim[str(curParse.tag.animacy)]
     if ("Ms-f" in curParse.tag):
-        curMorf.gender = Egender.malefemale
+        curMorph.gender = 'malefemale'
     else:
-        curMorf.gender = gend[str(curParse.tag.gender)]
-    curMorf.number = numb[str(curParse.tag.number)]
+        curMorph.gender = gend[str(curParse.tag.gender)]
+    curMorph.number = numb[str(curParse.tag.number)]
     if (str(curParse.tag.case) in cas):
-        curMorf.case1 = cas[str(curParse.tag.case)]
+        curMorph.case_morph = cas[str(curParse.tag.case)]
     else:
-        print("wrong case")
+        print("wrong case", curParse.tag.case)
         return None
-    #if 'Refl' in curMorf.tag:
-    #    curMorf.Reflection = Ereflection.reflexive
+    #if 'Refl' in curMorph.tag:
+    #    curMorph.Reflection = Ereflection.reflexive
     #как сделать reflexiveForm ??
     curCl = curParse.tag.POS
     if (curCl in ('VERB', 'INFN', 'PRTF', 'PRTS', 'GRND', 'PRED')): #PRED -кат.сост. мб убрать
         if (text[-2:] == "ся"):
             if (curCl == 'VERB' or curCl == 'INFN'):
-                curMorf.reflection = Ereflection.reflexive
+                curMorph.reflection = 'reflexive'
             else:
-                curMorf.reflection = Ereflection.reflexiveForm
+                curMorph.reflection = 'reflexive_form'
         else:
-            curMorf.reflection = Ereflection.unreflexive
+            curMorph.reflection = 'unreflexive'
     else:
-        curMorf.reflection = Ereflection.reflectionAny
-    curMorf.perfective = perf[str(curParse.tag.aspect)]
-    curMorf.transitive = trans[str(curParse.tag.transitivity)]
-    curMorf.person = pers[str(curParse.tag.person)]
+        curMorph.reflection = 'reflection_any'
+    curMorph.perfective = perf[str(curParse.tag.aspect)]
+    curMorph.transitive = trans[str(curParse.tag.transitivity)]
+    curMorph.person = pers[str(curParse.tag.person)]
     if (curCl == 'INFN'):
-        curMorf.tense = Etense.infinitive
+        curMorph.tense = 'infinitive'
     elif(curParse.tag.mood == 'impr'):
-        curMorf.tense = Etense.imperative
+        curMorph.tense = 'imperative'
     else:
-        curMorf.tense = tense[str(curParse.tag.tense)]
-    curMorf.voice = voice[str(curParse.tag.voice)]
-    #curMorf.degree =  ????????????????????????????????????????????????????????????????
-    if (len(curParse.lexeme) == 1 or curMorf.s_cl == Es_cl.preposition or curMorf.s_cl == Es_cl.gerund or curMorf.s_cl == Es_cl.conjunction or curMorf.s_cl == Es_cl.interjection or curMorf.s_cl == Es_cl.adverb): 
-        curMorf.static = True
-    return curMorf
+        curMorph.tense = tense[str(curParse.tag.tense)]
+    curMorph.voice = voice[str(curParse.tag.voice)]
+    #curMorph.degree =  ????????????????????????????????????????????????????????????????
+    if (len(curParse.lexeme) == 1 or curMorph.s_cl == 'preposition' or curMorph.s_cl == 'gerund' or curMorph.s_cl == 'conjunction' or curMorph.s_cl == 'interjection' or curMorph.s_cl == 'adverb'): 
+        curMorph.static = 'true'
+    return curMorph
 
-def findMorf(curMorf, db1):   #на выход - одно число, номер морфа
-    s = "SELECT number_morf FROM morf_characters_of_word WHERE " + \
-        "s_cl = \'" + str(curMorf.s_cl).split('.')[1] + "\' AND " + \
-        "animate = \'" + str(curMorf.animate).split('.')[1] + "\' AND " + \
-        "gender = \'" + str(curMorf.gender).split('.')[1] + "\' AND " + \
-        "number = \'" + str(curMorf.number).split('.')[1] + "\' AND " + \
-        "case1 = \'" + str(curMorf.case1).split('.')[1] + "\' AND " + \
-        "reflection = \'" + str(curMorf.reflection).split('.')[1] + "\' AND " + \
-        "perfective = \'" + str(curMorf.perfective).split('.')[1] + "\' AND " + \
-        "transitive = \'" + str(curMorf.transitive).split('.')[1] + "\' AND " + \
-        "person = \'" + str(curMorf.person).split('.')[1] + "\' AND " + \
-        "tense = \'" + str(curMorf.tense).split('.')[1] + "\' AND " + \
-        "voice = \'" + str(curMorf.voice).split('.')[1] + "\' AND " + \
-        "degree = \'" + str(curMorf.degree).split('.')[1] + "\' AND " + \
-        "static = \'" + str(curMorf.static) + "\'" + ";"
-    res = db1.query(s)
-    if (len(res) == 0):
-        print(s)
-    return res[0][0]
               
 def findWord(word, db1, strForWord): # на выход - массив из номеров слов
 #strForWord - дополнительная характеристика слова(главное, зависимое)
-    s0 = "SELECT number_word, ref_to_morf FROM word WHERE word_text = \'" + word + "\';"
+    s0 = "SELECT number_word, ref_to_morph FROM word WHERE word_text = \'" + word + "\';"
     variants = db1.query(s0)
     if (len(variants) > 1):
         print("Выберите варианты разбора " + strForWord + " слова  (указать номера в строку через пробел)\n")
         i = 0
         for i in range(len(variants)):
-            curMorf = variants[i][1]
-            curTextMorf = db1.query("SELECT * FROM morf_characters_of_word WHERE number_morf = " + str(curMorf))
+            curMorph = variants[i][1]
+            curTextMorph = db1.query("SELECT * FROM morph_characters_of_word WHERE number_morph = " + str(curMorph))
             print(i)
-            print(curTextMorf[0][1:])
+            print(curTextMorph[0][1:])
             print("---------------------------")
         choose = list(map(int, input().split()))
     elif (len(variants) == 1):
@@ -126,9 +106,9 @@ def inputImpFeat(text): # text - главного/зависимого
     return res
 
 
-def inputMorf(text = ""):
+def inputMorph(text = ""):
     print("Выберите характеристики" + text + " морфа\n")
-    curMorf = Morf()
+    curMorph = Morph()
     for curEnum in Enums:
         j = 1
         for param in curEnum.__members__:
@@ -137,11 +117,11 @@ def inputMorf(text = ""):
             print(param)
         choose = int(input())
         print("---------------")
-        curMorf.__dict__[curEnum.__name__[1:]] = curEnum(choose)
+        curMorph.__dict__[curEnum.__name__[1:]] = curEnum(choose)
     print("static: 0 - True, 1 - False\n")
     choose = int(input())
-    curMorf.static = (choose == 0)
-    return curMorf
+    curMorph.static = (choose == 0)
+    return curMorph
 
 def findPrep(prep, db1):
     s = "SELECT number_prep FROM prep WHERE prep_text = \'" + prep + "\'"
@@ -160,7 +140,7 @@ def findImp(curImp, db1): # на вход - вектор из NUMBER_PARAMETRS t
             s += "AND "
     res = db.query(s)[0][0]
     return res    
-def insertWord(word, db1, morph1, insAllVars = False, listMorfs = None): # word - str
+def insertWord(word, db1, morph1, insAllVars = False, listMorphs = None): # word - str
     pars = morph1.parse(word)
     if (len(pars) > 1):
         if (insAllVars == True):
@@ -180,15 +160,15 @@ def insertWord(word, db1, morph1, insAllVars = False, listMorfs = None): # word 
         if (var >= len(pars)):
             print(var, "неверный номер разбора\n", sep = " ")
         else:
-            curMorf = parseToMorf(word, pars[var])
-            insertWordWithMorf(word, curMorf, pars[var].tag.cyr_repr, db1)   
+            curMorph = parseToMorph(word, pars[var])
+            insertWordWithMorph(word, curMorph, pars[var].tag.cyr_repr, db1)   
 
-def insertWordWithMorf(word, curMorf, tag, db1): # word - str
-    # findMorf - получение номера морфа(один морф в идеале)
-    numberMorf = findMorf(curMorf, db1)
-    checkExist = db.query("SELECT * FROM word WHERE word_text = \'" + word + "\' AND " + "ref_to_morf = " + str(numberMorf) + ";")
+def insertWordWithMorph(word, curMorph, tag, db1): # word - str
+    # findMorph - получение номера морфа(один морф в идеале)
+    numberMorph = findMorph(curMorph, db1)
+    checkExist = db.query("SELECT * FROM word WHERE word_text = \'" + word + "\' AND " + "ref_to_morph = " + str(numberMorph) + ";")
     if (len(checkExist) == 0): # слова еще нет в базе
-        s = "INSERT INTO word VALUES(DEFAULT, " + str(numberMorf) + ", \'" + word + "');"
+        s = "INSERT INTO word VALUES(DEFAULT, " + str(numberMorph) + ", \'" + word + "');"
         db1.execute(s)
         #print("слово " + word + " в форме (" + str(tag) +") добавлено\n")
     #else:
@@ -247,10 +227,10 @@ def insertParadigma(word, db1, morph1, insAllVars = False):
         #print(choose)
     for i in choose:
         for curLex in parsForNormalForms[i].lexeme:
-            curMorf = parseToMorf(curLex.word, curLex)
+            curMorph = parseToMorph(curLex.word, curLex)
             #print(curLex.tag)
-            if (curMorf != None):
-                insertWordWithMorf(curLex.word, curMorf, curLex.tag.cyr_repr, db1)
+            if (curMorph != None):
+                insertWordWithMorph(curLex.word, curMorph, curLex.tag.cyr_repr, db1)
         #print("------------")
             
 
