@@ -403,13 +403,12 @@ class ParsePoint:
         G1.add_node(textMainWord, pos = [5, 20])
         self.addEdge(1, parse1, G1, 0, textMainWord)
         pos=nx.get_node_attributes(G1,'pos')
-
         fig = plt.figure(figsize=(20,22))
         plt.scatter(max_x + 0.1, max_y + 0.1, s = 1, c = 'white')
         plt.scatter(-0.5, 0.0, s = 1, c = 'white')
         plt.scatter(max_x + 0.1, 0.0, s = 1, c = 'white')
         #pos=graphviz_layout(G1, prog='dot')
-        nx.draw(G1, pos, with_labels = True, node_size=1, horizontalalignment='center', verticalalignment='top', font_size = 20)
+        nx.draw(G1, pos, with_labels = True, arrows=False, node_size=1, horizontalalignment='center', verticalalignment='top', font_size = 20)
         plt.show()
 class Sentence:
     def __init__(self):
@@ -538,5 +537,46 @@ def parse(con, str1, needTrace = False):
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                         password='postgres', host='localhost')
 
-a1 = parse(con, "Просит бури.", True)
+
+a1 = parse(con, "Маленький мальчик хочет спать.", True)
+a1 = parse(con, "Каждый час имеет свое чудо.", True)
+a1 = parse(con, "Памятник себе воздвиг нерукотворный.", True)
+a1 = parse(con, "Рассеет серых туч войска.", True)
+#a1 = parse(con, "Сегодня будет четный день.", True)
+a1 = parse(con, "Шекспир был английским писателем.", True)
+a1 = parse(con, "Надежда умирает последней.", True)
+a1 = parse(con, "В небе танцует золото.", True)
+a1 = parse(con, "Звезды.", True)
+
+
+
+
+#a1 = parse(con, "Взрослые люди ходят на работу.", True)
+
+#a1 = parse(con, "Приведет за собой весну.", True) плохо
+#a1 = parse(con, "Взрослые люди ходят на работу.", True) плохо
+#a1 = parse(con, "Заяц поздней осенью меняет серую шубу на белую.", True)
+#a1 = parse(con, "Я прочел до середины список кораблей.", True)
+#a1 = parse(con, "Вязнут расписные спицы в расхлябанные колеи.", True)
+#a1 = parse(con, "Ковыли с вековою тоскою пригнулись к земле.", True)
+#a1 = parse(con, "К метро шли долго.", True)
+#a1 = parse(con, "Студенты замерзли на лекции.", True)
+#a1 = parse(con, "Ты стал очень хорошим человеком.", True)
+
+
+#a1 = parse(con, "Ты будешь сок?", True)
+#a1 = parse(con, "Все счастливые семьи счастливы по-своему.", True)
+#a1 = parse(con, "Осень поражает нас своими непрерывными изменениями.", True)
+#a1 = parse(con, "Вещи, потерянные нами, обязательно вернутся к нам!.", True)
+
+
+
+
+#a1 = parse(con, "Моя ладонь превратилась в кулак.", True) плохо
+
+#a1 = parse(con, "Счастье можно найти даже в темные времена.", True) плохо
+
+#a1 = parse(con, "Дети поздно пришли домой.", True)  плохо
+#a1 = parse(con, "На штурм.", True)  плохо главное дб НА
+
 print(a1)
