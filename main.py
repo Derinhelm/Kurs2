@@ -8,6 +8,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 import psycopg2
+import math
 
 
 class GPattern:
@@ -195,11 +196,9 @@ class Word:
 
 
 class Gp:
-    def __init__(self):
-        self.model = GPattern()
-        self.depWord = Word()
-        self.mark = 0
-        self.level = 0
+    def __init__(self, mod, dw):
+        self.model = mod
+        self.depWord = dw
 
 
 class ParsePointWord:
@@ -213,18 +212,33 @@ class ParsePointWord:
 class ParsePoint:
     directForIsApplicable = 1
 
-    def __init__(self):
-        self.parsePointWordList = []
-        self.childParsePoint = []
+    def __init__(self, wl=[], childList=[], mark=0.0):
+        self.parsePointWordList = wl
+        self.childParsePoint = childList
+        self.markParsePoint = mark
 
-    def getMark(self):
+    def getMark(self, parentMark):
+        '''return mark of ParsePoint and count of parsed word in this ParsePoint'''
         summ = 0
+        countParsedWord = 0
         for curPointWord in self.parsePointWordList:
             if (curPointWord.parsed):
-                summ += 0.01  # чтобы учитывать количество разобранных(важно, если одинаковые оценки, особенно 0)
+                countParsedWord += 1
                 for curGp in curPointWord.usedGp:
-                    summ += curGp.mark
-        return summ
+                    summ += math.log(curGp.model.mark)
+        return ((summ + parentMark), countParsedWord)
+
+    def getBestParsePoint(self):
+        ''' рекурсивно ищет в дереве лучшую точку разбора, возвращает (лучшая точка разбора, ее оценка, количество разобранных слов)'''
+        bestPoint = self
+        (bestPointMark, bestCountParsedWord) = self.getMark(0.0)
+        rootMark = bestPointMark
+        for curChild in self.childParsePoint:
+            (curBestPoint, curBestMark, curCountParsedWord) = curChild.getBestParsePoint()
+            curBestMark += rootMark
+            if (curBestMark > bestPointMark) or (curBestMark == bestPointMark and bestCountParsedWord <= curCountParsedWord):
+                (bestPoint, bestPointMark, bestCountParsedWord) = (curBestPoint, curBestMark, curCountParsedWord)
+        return (bestPoint, bestPointMark, bestCountParsedWord)
 
     def index(self,
               word1):  # ищет в списке слов в данной точке разбора индекс данного слова(класса Word), вспомогательная функция
@@ -290,7 +304,6 @@ class ParsePoint:
                 if (morphForm != None):  # данное i-слово удовлетворяет требованиям зависимости модели
                     return (True, numberDep, morphForm)
         return (False, None, None)
-        return (False, None, None)
 
     def isApplicable(self, mainPPWord, gPatternToApply):  # где проверка предлогов???????
         # mainPPWord - номер главного!!!
@@ -308,50 +321,58 @@ class ParsePoint:
             return self.rightMove(mainPPWord, gPatternToApply)
 
     def apply(self, mainPPWord, dependingPPWord, usedMorphAnswer, gPatternToApply):
-        newParsePoint = copy.deepcopy(self)
-        newParsePoint.parsePointWordList[dependingPPWord].parsed = True
-        newParsePoint.parsePointWordList[dependingPPWord].usedMorphAnswer = usedMorphAnswer
-        newGp = Gp()
-        newGp.mark = gPatternToApply.mark
-        newGp.level = gPatternToApply.level
-        newGp.model = copy.deepcopy(gPatternToApply)
-        newGp.depWord = self.parsePointWordList[dependingPPWord].word
-        newParsePoint.parsePointWordList[mainPPWord].usedGp.append(newGp)
-        return newParsePoint
+        '''create and return new child ParsePoint'''
+        newWordList = copy.deepcopy(self.parsePointWordList)
+        newWordList[dependingPPWord].parsed = True
+        newWordList[dependingPPWord].usedMorphAnswer = usedMorphAnswer
+        newGp = Gp(gPatternToApply, self.parsePointWordList[dependingPPWord].word)
+        newWordList[mainPPWord].usedGp.append(newGp)
+        (mark, _) = self.getMark(self.markParsePoint)
+        return ParsePoint(newWordList, [], mark)
+
+    def findVerb(self):
+        for i in range(len(self.parsePointWordList)):
+            curPointWord = self.parsePointWordList[i]
+            for curMorph in curPointWord.word.morph:
+                if curMorph.s_cl == 'verb':
+                    newParsePoint = copy.deepcopy(self)
+                    newParsePoint.parsePointWordList[i].parsed = True
+                    newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
+                    self.childParsePoint.append(newParsePoint)
+                    return (newParsePoint, True, [i])
+        return None
+    def findNoun(self):
+        for i in range(len(self.parsePointWordList)):
+            curPointWord = self.parsePointWordList[i]
+            for curMorph in curPointWord.word.morph:
+                if curMorph.s_cl == 'noun' and curMorph.case_morph == 'nominative':
+                    newParsePoint = copy.deepcopy(self)
+                    newParsePoint.parsePointWordList[i].parsed = True
+                    newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
+                    self.childParsePoint.append(newParsePoint)
+                    return (newParsePoint, True, [i])  # найдено первое для разбора слово
 
     def getNextParsePoint(self):  # (newPoint, flagFirstUse, firstWords)
-        countParsed = 0
         parsed = []
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
-            countParsed += curPointWord.parsed
             if (curPointWord.parsed == True):
                 parsed.append(i)
-        if (countParsed == 0):
-            for i in range(len(self.parsePointWordList)):
-                curPointWord = self.parsePointWordList[i]
-                for curMorph in curPointWord.word.morph:
-                    if curMorph.s_cl == 'verb':
-                        newParsePoint = copy.deepcopy(self)
-                        newParsePoint.parsePointWordList[i].parsed = True
-                        newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
-                        self.childParsePoint.append(newParsePoint)
-                        return (newParsePoint, True, [i])  # найдено первое для разбора слово
+        if (not parsed): # нет разобранных слов
+            verbRes = self.findVerb()
+            if verbRes:
+                return verbRes # найдено первое для разбора слово
             # в предложении нет глагола
-            for i in range(len(self.parsePointWordList)):
-                curPointWord = self.parsePointWordList[i]
-                for curMorph in curPointWord.word.morph:
-                    if curMorph.s_cl == 'noun' and curMorph.case_morph == 'nominative':
-                        newParsePoint = copy.deepcopy(self)
-                        newParsePoint.parsePointWordList[i].parsed = True
-                        newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
-                        self.childParsePoint.append(newParsePoint)
-                        return (newParsePoint, True, [i])  # найдено первое для разбора слово
+            nounRes = self.findNoun()
+            if nounRes:
+                return nounRes
+            else:
+                return (None, False, None)
         else:
             bestMainWord = Word()
             bestDepWord = Word()
             usedDepMorph = Morph()
-            bestModel = Gp()
+            bestModel = GPattern()
             bestModelMark = 0
             for i in parsed:
                 curParsedPoint = self.parsePointWordList[i]
@@ -395,7 +416,7 @@ class ParsePoint:
             if (len(self.parsePointWordList[depWordInd].usedGp) != 0):
                 self.addEdge(depth + 1, self.parsePointWordList[depWordInd].usedGp, G1, i * 7, newPointName)
 
-    def visualizate(self, firstIndices):
+    def visualizate(self, firstIndices, name=""):
         G1 = nx.Graph()
         if not firstIndices:
             for cur in self.parsePointWordList:
@@ -421,7 +442,10 @@ class ParsePoint:
         plt.ylim(y_min - y_margin, y_max + y_margin)
         nx.draw(G1, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
                 verticalalignment='top', font_size=20)
+        plt.title(name)
         plt.show()
+
+
 class Sentence:
     def __init__(self):
         self.inputStr = ""
@@ -465,20 +489,6 @@ class Sentence:
             curParsePointWord.word = word
             self.rootPP.parsePointWordList.append(curParsePointWord)
 
-    def getBestParsePoint(self):
-        bestPoint = self.rootPP
-        bestPointMark = self.rootPP.getMark()
-        for curChild in self.rootPP.childParsePoint:
-            s1 = Sentence()
-            s1.rootPP = curChild
-            curBest = s1.getBestParsePoint()
-            curMark = curBest.getMark()
-            if (curMark > bestPointMark):
-                bestPointMark = curMark
-                bestPoint = curBest
-
-        return bestPoint
-
     # проверка связности - считаем, сколько слов в связном дереве, если = кол-ву слов, то все ок
     # на вход - res(т.е. bestParsePoint)
     def countDependent(self, curParsePoint, firstWordIndex):
@@ -499,12 +509,12 @@ class Sentence:
         if (self.firstUse == True):
             self.firstUse = False
             self.getRootParsePoint()
-        bestParsePoint = self.getBestParsePoint()
+        (bestParsePoint, bestParsePointMark, _) = self.rootPP.getBestParsePoint()
         if self.firstParseWordsIndices:
             print("Лучшая точка")
-            bestParsePoint.visualizate(self.firstParseWordsIndices)
+            bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
         else:
-            bestParsePoint.visualizate([])
+            bestParsePoint.visualizate([], "Лучшая точка")
         if (bestParsePoint == None):
             print("Больше вариантов разбора нет")
             return None
@@ -515,9 +525,6 @@ class Sentence:
                 allWordsParsed = False
                 break
         while (allWordsParsed == False):
-            # for ti in range(len(bestParsePoint.parsePointWordList)):
-            #    print(bestParsePoint.parsePointWordList[ti].parsed)
-            # print("----------------")
             (newPoint, flagFirstUse, firstWords) = bestParsePoint.getNextParsePoint()
             if (newPoint == None):
                 print("Не разобрано!")
@@ -529,12 +536,10 @@ class Sentence:
             if (flagFirstUse):
                 self.firstParseWordsIndices = firstWords
             print("Новая точка")
-            newPoint.visualizate(self.firstParseWordsIndices)
-            s1 = Sentence()
-            s1.rootPP = bestParsePoint  # а надо ли copy ???
-            bestParsePoint = s1.getBestParsePoint()
+            newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
+            (bestParsePoint, bestParsePointMark, _) = self.rootPP.getBestParsePoint()
             print("Лучшая точка")
-            bestParsePoint.visualizate(self.firstParseWordsIndices)
+            bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
             allWordsParsed = True
             for curPointWord in bestParsePoint.parsePointWordList:
                 if (curPointWord.parsed == False):
