@@ -47,7 +47,7 @@ def extractFirstLevel(word, curMorph, con):
     # получение морфа
     # s1 - получение номера главного слова(одно слово в идеале)
     s2 = "SELECT * FROM gpattern_1_level WHERE main_morph IN (" + s0 + ")"
-    s3 = "SELECT  mark, morph_constraints.* FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph;"
+    s3 = "SELECT  mark, morph_constraints.* FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph ORDER BY mark DESC;"
     cursor = con.cursor()
     params = (curMorph.s_cl, curMorph.animate, curMorph.gender, curMorph.number, \
               curMorph.case_morph, curMorph.reflection, curMorph.perfective, curMorph.transitive, \
@@ -92,7 +92,7 @@ def extractSecondLevel(word, curMorph, con):
     # s1 - получение номера главного слова(одно слово в идеале)
     s2 = "SELECT * FROM gpattern_2_level WHERE main_morph IN (" + s0 + ") AND gpattern_2_level.main_word = " + \
          "(SELECT id FROM word WHERE name = %s)"
-    s3 = "SELECT  mark, morph_constraints.* FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph;"
+    s3 = "SELECT  mark, morph_constraints.* FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph ORDER BY mark DESC;"
     cursor = con.cursor()
     params = (curMorph.s_cl, curMorph.animate, curMorph.gender, curMorph.number, \
               curMorph.case_morph, curMorph.reflection, curMorph.perfective, curMorph.transitive, \
@@ -138,7 +138,7 @@ def extractThirdLevel(word, curMorph, con):
     s2 = "SELECT * FROM gpattern_3_level WHERE main_morph IN (" + s0 + ") AND gpattern_3_level.main_word = " + \
          "(SELECT id FROM word WHERE name = %s)"
     s3 = "SELECT  mark, morph_constraints.*, word.name FROM (" + s2 + ") AS t JOIN morph_constraints ON morph_constraints.id = dep_morph " + \
-         "JOIN word ON dep_word = word.id;"
+         "JOIN word ON dep_word = word.id ORDER BY mark DESC;"
     cursor = con.cursor()
     params = (curMorph.s_cl, curMorph.animate, curMorph.gender, curMorph.number, \
               curMorph.case_morph, curMorph.reflection, curMorph.perfective, curMorph.transitive, \
@@ -357,6 +357,17 @@ class ParsePoint:
                     self.childParsePoint.append(newParsePoint)
                     return (newParsePoint, [i])  # найдено первое для разбора слово
 
+    def findPrep(self):
+        for i in range(len(self.parsePointWordList)):
+            curPointWord = self.parsePointWordList[i]
+            for curMorph in curPointWord.word.morph:
+                if curMorph.s_cl == 'preposition':
+                    newParsePoint = copy.deepcopy(self)
+                    newParsePoint.parsePointWordList[i].parsed = True
+                    newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
+                    self.childParsePoint.append(newParsePoint)
+                    return (newParsePoint, [i])  # найдено первое для разбора слово
+
     def getNextParsePoint(self):  # (newPoint, firstWords)
         parsed = []
         for i in range(len(self.parsePointWordList)):
@@ -371,6 +382,9 @@ class ParsePoint:
             nounRes = self.findNoun()
             if nounRes:
                 return nounRes
+            prepRes = self.findPrep()
+            if prepRes:
+                return prepRes
             else:
                 return (None, None)
         else:
