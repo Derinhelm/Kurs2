@@ -236,7 +236,8 @@ class ParsePoint:
         for curChild in self.childParsePoint:
             (curBestPoint, curBestMark, curCountParsedWord) = curChild.getBestParsePoint()
             curBestMark += rootMark
-            if (curBestMark > bestPointMark) or (curBestMark == bestPointMark and bestCountParsedWord <= curCountParsedWord):
+            if (curBestMark > bestPointMark) or (
+                    curBestMark == bestPointMark and bestCountParsedWord <= curCountParsedWord):
                 (bestPoint, bestPointMark, bestCountParsedWord) = (curBestPoint, curBestMark, curCountParsedWord)
         return (bestPoint, bestPointMark, bestCountParsedWord)
 
@@ -339,8 +340,9 @@ class ParsePoint:
                     newParsePoint.parsePointWordList[i].parsed = True
                     newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
                     self.childParsePoint.append(newParsePoint)
-                    return (newParsePoint, True, [i])
+                    return (newParsePoint, [i])
         return None
+
     def findNoun(self):
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
@@ -350,24 +352,24 @@ class ParsePoint:
                     newParsePoint.parsePointWordList[i].parsed = True
                     newParsePoint.parsePointWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
                     self.childParsePoint.append(newParsePoint)
-                    return (newParsePoint, True, [i])  # найдено первое для разбора слово
+                    return (newParsePoint, [i])  # найдено первое для разбора слово
 
-    def getNextParsePoint(self):  # (newPoint, flagFirstUse, firstWords)
+    def getNextParsePoint(self):  # (newPoint, firstWords)
         parsed = []
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
             if (curPointWord.parsed == True):
                 parsed.append(i)
-        if (not parsed): # нет разобранных слов
+        if (not parsed):  # нет разобранных слов
             verbRes = self.findVerb()
             if verbRes:
-                return verbRes # найдено первое для разбора слово
+                return verbRes  # найдено первое для разбора слово
             # в предложении нет глагола
             nounRes = self.findNoun()
             if nounRes:
                 return nounRes
             else:
-                return (None, False, None)
+                return (None, None)
         else:
             bestMainWord = Word()
             bestDepWord = Word()
@@ -395,9 +397,16 @@ class ParsePoint:
             if (bestModelMark != 0):
                 newParsePoint = self.apply(bestMainWord, bestDepWord, usedDepMorph, bestModel)
                 self.childParsePoint.append(newParsePoint)
-                return (newParsePoint, False, None)
+                return (newParsePoint, None)
             print("No model")
-            return (None, False, None)
+            return (None, None)
+
+    def checkEndParse(self):
+        '''check that all words in this ParsePoint are parsed'''
+        for curPointWord in self.parsePointWordList:
+            if (curPointWord.parsed == False):
+                return False
+        return True
 
     def addEdge(self, depth, newParsePointWordList, G1, shiftX, nameMainWord):
         # добавляет в граф новую зависимую вершину и новую связь!
@@ -450,8 +459,7 @@ class Sentence:
     def __init__(self):
         self.inputStr = ""
         self.wordList = []
-        self.rootPP = ParsePoint()  # ????????
-        self.firstUse = True
+        self.rootPP = None  # заполняется потом, с помощью getRootParsePoint
         self.firstParseWordsIndices = []  # слова, первые для разбора, в простых предложениях
 
     def setString(self, inputStr1):
@@ -506,26 +514,15 @@ class Sentence:
     def sintParse(self, needTrace=False):
         if (needTrace):
             tracePoints = []
-        if (self.firstUse == True):
-            self.firstUse = False
+        if (not self.rootPP):
             self.getRootParsePoint()
-        (bestParsePoint, bestParsePointMark, _) = self.rootPP.getBestParsePoint()
-        if self.firstParseWordsIndices:
+
+        while (1):
+            (bestParsePoint, _, _) = self.rootPP.getBestParsePoint()
             print("Лучшая точка")
             bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
-        else:
-            bestParsePoint.visualizate([], "Лучшая точка")
-        if (bestParsePoint == None):
-            print("Больше вариантов разбора нет")
-            return None
-        allWordsParsed = True
 
-        for curPointWord in bestParsePoint.parsePointWordList:
-            if (curPointWord.parsed == False):
-                allWordsParsed = False
-                break
-        while (allWordsParsed == False):
-            (newPoint, flagFirstUse, firstWords) = bestParsePoint.getNextParsePoint()
+            (newPoint, firstWords) = bestParsePoint.getNextParsePoint()
             if (newPoint == None):
                 print("Не разобрано!")
                 if (needTrace):
@@ -533,21 +530,14 @@ class Sentence:
                 return (bestParsePoint)
             if (needTrace):
                 tracePoints.append(newPoint)
-            if (flagFirstUse):
+            if (firstWords):
                 self.firstParseWordsIndices = firstWords
             print("Новая точка")
             newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
-            (bestParsePoint, bestParsePointMark, _) = self.rootPP.getBestParsePoint()
-            print("Лучшая точка")
-            bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
-            allWordsParsed = True
-            for curPointWord in bestParsePoint.parsePointWordList:
-                if (curPointWord.parsed == False):
-                    allWordsParsed = False
-                    break
-        if (needTrace):
-            return (bestParsePoint, tracePoints)
-        return (bestParsePoint)
+            if newPoint.checkEndParse():
+                if (needTrace):
+                    return (newPoint, tracePoints)
+                return (newPoint)
 
 
 def parse(con, str1, needTrace=False):
