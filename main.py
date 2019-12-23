@@ -229,16 +229,19 @@ class ParsePoint:
         return ((summ + parentMark), countParsedWord)
 
     def getBestParsePoint(self):
-        ''' рекурсивно ищет в дереве лучшую точку разбора, возвращает (лучшая точка разбора, ее оценка, количество разобранных слов)'''
+        ''' рекурсивно ищет в дереве(начинающегося с данной точки разбора) лучшую точку разбора(в которой не все слова разобраны),
+         возвращает (лучшая точка разбора, ее оценка, количество разобранных слов)'''
         bestPoint = self
         (bestPointMark, bestCountParsedWord) = self.getMark(0.0)
         rootMark = bestPointMark
+        countWords = len(self.parsePointWordList)
         for curChild in self.childParsePoint:
             (curBestPoint, curBestMark, curCountParsedWord) = curChild.getBestParsePoint()
             curBestMark += rootMark
-            if (curBestMark > bestPointMark) or (
-                    curBestMark == bestPointMark and bestCountParsedWord <= curCountParsedWord):
-                (bestPoint, bestPointMark, bestCountParsedWord) = (curBestPoint, curBestMark, curCountParsedWord)
+            if curCountParsedWord != countWords: # точка со всеми разобранными не может быть лучшей
+                if (curBestMark > bestPointMark) or (
+                        curBestMark == bestPointMark and bestCountParsedWord <= curCountParsedWord):
+                    (bestPoint, bestPointMark, bestCountParsedWord) = (curBestPoint, curBestMark, curCountParsedWord)
         return (bestPoint, bestPointMark, bestCountParsedWord)
 
     def index(self,
@@ -408,6 +411,19 @@ class ParsePoint:
                 return False
         return True
 
+    def checkPrep(self):
+        for i in range(len(self.parsePointWordList)):
+            curMain = self.parsePointWordList[i]
+            if curMain.usedMorphAnswer.s_cl == 'preposition':
+                if not curMain.usedGp: # у предлога нет зависимого
+                    return False
+                if len(curMain.usedGp) > 1: # у предлога больше одного зависимого
+                    return False
+                curDep = curMain.usedGp[0].depWord
+                if curDep.numberInSentence <= i: # у предлога зависимое должно стоять справа от главного
+                    return False
+        return True
+
     def addEdge(self, depth, newParsePointWordList, G1, shiftX, nameMainWord):
         # добавляет в граф новую зависимую вершину и новую связь!
         # beginIndex - строка, префикс названия
@@ -519,9 +535,7 @@ class Sentence:
 
         while (1):
             (bestParsePoint, _, _) = self.rootPP.getBestParsePoint()
-            print("Лучшая точка")
-            bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
-
+            #bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
             (newPoint, firstWords) = bestParsePoint.getNextParsePoint()
             if (newPoint == None):
                 print("Не разобрано!")
@@ -532,12 +546,12 @@ class Sentence:
                 tracePoints.append(newPoint)
             if (firstWords):
                 self.firstParseWordsIndices = firstWords
-            print("Новая точка")
-            newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
+            #newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
             if newPoint.checkEndParse():
-                if (needTrace):
-                    return (newPoint, tracePoints)
-                return (newPoint)
+                if newPoint.checkPrep():
+                    if (needTrace):
+                        return (newPoint, tracePoints)
+                    return (newPoint)
 
 
 def parse(con, str1, needTrace=False):
@@ -555,9 +569,21 @@ def parse(con, str1, needTrace=False):
 
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                        password='postgres', host='localhost')
+a1 = parse(con, "Ходить на работу.")
 
+'''
+s = Sentence()
+str1 = "Взрослые люди ходят на работу."
+s.setString(str1)
+s.morphParse()
+s.getGPatterns(con)
+res = s.sintParse()
+res.visualizate(s.firstParseWordsIndices)
+for i in range(10):
+    res1 = s.sintParse()
+    res1.visualizate(s.firstParseWordsIndices)
 a1 = parse(con, "Маленький мальчик хочет спать.")
-'''a1 = parse(con, "Каждый час имеет свое чудо.", True)
+a1 = parse(con, "Каждый час имеет свое чудо.", True)
 a1 = parse(con, "Памятник себе воздвиг нерукотворный.", True)
 a1 = parse(con, "Рассеет серых туч войска.", True)
 #a1 = parse(con, "Сегодня будет четный день.", True)
