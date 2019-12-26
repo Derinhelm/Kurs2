@@ -319,39 +319,17 @@ class ParsePoint:
         newMark = self.markParsePoint + math.log(gPatternToApply.mark)
         return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1)
 
-    def findVerb(self):
+    def findFirstWord(self, fun):
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
             for curMorph in curPointWord.word.morph:
-                if curMorph.s_cl == 'verb':
+                if fun(curMorph):
                     newWordList = copy.deepcopy(self.parsePointWordList)
                     newWordList[i].parsed = True
                     newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
                     newParsePoint = ParsePoint(newWordList, [], 0, 1)
                     return (newParsePoint, [i])
         return None
-
-    def findNoun(self):
-        for i in range(len(self.parsePointWordList)):
-            curPointWord = self.parsePointWordList[i]
-            for curMorph in curPointWord.word.morph:
-                if curMorph.s_cl == 'noun' and curMorph.case_morph == 'nominative':
-                    newWordList = copy.deepcopy(self.parsePointWordList)
-                    newWordList[i].parsed = True
-                    newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
-                    newParsePoint = ParsePoint(newWordList, [], 0, 1)
-                    return (newParsePoint, [i])
-
-    def findPrep(self):
-        for i in range(len(self.parsePointWordList)):
-            curPointWord = self.parsePointWordList[i]
-            for curMorph in curPointWord.word.morph:
-                if curMorph.s_cl == 'preposition':
-                    newWordList = copy.deepcopy(self.parsePointWordList)
-                    newWordList[i].parsed = True
-                    newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
-                    newParsePoint = ParsePoint(newWordList, [], 0, 1)
-                    return (newParsePoint, [i])  # найдено первое для разбора слово
 
     def getNextParsePoint(self):  # (newPoint, firstWords)
         parsed = []
@@ -360,14 +338,14 @@ class ParsePoint:
             if (curPointWord.parsed == True):
                 parsed.append(i)
         if (not parsed):  # нет разобранных слов
-            verbRes = self.findVerb()
+            verbRes = self.findFirstWord(lambda m: m.s_cl == 'verb')
             if verbRes:
                 return verbRes  # найдено первое для разбора слово
             # в предложении нет глагола
-            nounRes = self.findNoun()
+            nounRes = self.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative')
             if nounRes:
                 return nounRes
-            prepRes = self.findPrep()
+            prepRes = self.findFirstWord(lambda m: m.s_cl == 'preposition')
             if prepRes:
                 return prepRes
             else:
