@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 import psycopg2
 import math
-
+import sys
 
 class GPattern:
     def __init__(self, l=-1, textWord="", nw="", p="", m=0.0):
@@ -212,8 +212,8 @@ class ParsePointWord:
 class ParsePoint:
     directForIsApplicable = 1
 
-    def __init__(self, wl = [], cl = [], mark=0.0, cpw = 0):
-        self.parsePointWordList = wl
+    def __init__(self, ppwl, cl, mark, cpw):
+        self.parsePointWordList = ppwl
         self.childParsePoint = cl
         self.markParsePoint = mark
         self.countParsedWords = cpw
@@ -322,64 +322,54 @@ class ParsePoint:
     def findFirstWord(self, fun):
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
+            listNewParsePoints = []
             for curMorph in curPointWord.word.morph:
                 if fun(curMorph):
                     newWordList = copy.deepcopy(self.parsePointWordList)
                     newWordList[i].parsed = True
                     newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
                     newParsePoint = ParsePoint(newWordList, [], 0, 1)
-                    return (newParsePoint, [i])
+                    listNewParsePoints.append(newParsePoint)
+            if listNewParsePoints:
+                return (listNewParsePoints, [i])
         return None
 
-    def getNextParsePoint(self):  # (newPoint, firstWords)
+    def getNewParsePoint(self):
+        '''create new ParsePoint, child for self'''
         parsed = []
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
             if (curPointWord.parsed == True):
                 parsed.append(i)
-        if (not parsed):  # нет разобранных слов
-            verbRes = self.findFirstWord(lambda m: m.s_cl == 'verb')
-            if verbRes:
-                return verbRes  # найдено первое для разбора слово
-            # в предложении нет глагола
-            nounRes = self.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative')
-            if nounRes:
-                return nounRes
-            prepRes = self.findFirstWord(lambda m: m.s_cl == 'preposition')
-            if prepRes:
-                return prepRes
-            else:
-                return (None, None)
-        else:
-            bestMainWord = -1
-            bestDepWord = -1
-            usedDepMorph = Morph()
-            bestModel = GPattern()
-            bestModelMark = 0
-            for i in parsed:
-                curParsedPoint = self.parsePointWordList[i]
-                curWord = curParsedPoint.word
-                chooseVarMorph = curParsedPoint.usedMorphAnswer
-                models = None
-                for j in range(len(curWord.morph)):
-                    if (curWord.morph[j] == chooseVarMorph):
-                        models = curWord.gPatterns[j]
-                        break
-                if (models != None):
-                    for curModel in (models.thirdLevel + models.secondLevel + models.firstLevel):
-                        (canApply, depWord, morphDepWord) = self.isApplicable(i, curModel)
-                        if (canApply and curModel.mark > bestModelMark):  # !!!!!
-                            bestModelMark = curModel.mark
-                            bestModel = copy.deepcopy(curModel)
-                            bestMainWord = i
-                            bestDepWord = depWord
-                            usedDepMorph = morphDepWord
-            if (bestModelMark != 0):
-                newParsePoint = self.apply(bestMainWord, bestDepWord, usedDepMorph, bestModel)
-                self.childParsePoint.append(newParsePoint)
-                return (newParsePoint, None)
-            print("No model")
-            return (None, None)
+        bestMainWord = -1
+        bestDepWord = -1
+        usedDepMorph = Morph()
+        bestModel = GPattern()
+        bestModelMark = 0
+        for i in parsed:
+            curParsedPoint = self.parsePointWordList[i]
+            curWord = curParsedPoint.word
+            chooseVarMorph = curParsedPoint.usedMorphAnswer
+            models = None
+            for j in range(len(curWord.morph)):
+                if (curWord.morph[j] == chooseVarMorph):
+                    models = curWord.gPatterns[j]
+                    break
+            if (models != None):
+                for curModel in (models.thirdLevel + models.secondLevel + models.firstLevel):
+                    (canApply, depWord, morphDepWord) = self.isApplicable(i, curModel)
+                    if (canApply and curModel.mark > bestModelMark):  # !!!!!
+                        bestModelMark = curModel.mark
+                        bestModel = copy.deepcopy(curModel)
+                        bestMainWord = i
+                        bestDepWord = depWord
+                        usedDepMorph = morphDepWord
+        if (bestModelMark != 0):
+            newParsePoint = self.apply(bestMainWord, bestDepWord, usedDepMorph, bestModel)
+            self.childParsePoint.append(newParsePoint)
+            return newParsePoint
+        print("No model")
+        return None
 
     def checkEndParse(self):
         '''check that all words in this ParsePoint are parsed'''
@@ -482,12 +472,30 @@ class Sentence:
             curWord.getGPatterns(con)
 
     def getRootParsePoint(self):
-        self.rootPP = ParsePoint()
+        self.rootPP = ParsePoint([], [], 0.0, 0)
         for word in self.wordList:
             curParsePointWord = ParsePointWord()
             curParsePointWord.parsed = False
             curParsePointWord.word = word
             self.rootPP.parsePointWordList.append(curParsePointWord)
+        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb')
+        if verbRes:
+            (listNewParsePoints, firstWords) = verbRes
+        else:
+            # в предложении нет глагола
+            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative')
+            if nounRes:
+                (listNewParsePoints, firstWords) = nounRes
+            else:
+                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition')
+                if prepRes:
+                    (listNewParsePoints, firstWords) = prepRes
+                else:
+                    print("В предложении нет глагола, сущ в И.п, предлога")
+                    sys.exit()
+        self.rootPP.childParsePoint = listNewParsePoints
+        self.firstParseWordsIndices = firstWords
+        self.bestParsePoints = listNewParsePoints
 
     def insertNewParsePoint(self, newPoint):
         '''insert new ParsePoint into bestParsePoints'''
@@ -532,7 +540,7 @@ class Sentence:
         while (1):
             bestParsePoint = self.getBestParsePoint()
             #bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
-            (newPoint, firstWords) = bestParsePoint.getNextParsePoint()
+            newPoint = bestParsePoint.getNewParsePoint()
             if (newPoint == None):
                 print("Не разобрано!")
                 if (needTrace):
@@ -541,8 +549,6 @@ class Sentence:
             self.insertNewParsePoint(newPoint)
             if (needTrace):
                 tracePoints.append(newPoint)
-            if (firstWords):
-                self.firstParseWordsIndices = firstWords
             #newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
             if newPoint.checkEndParse():
                 if newPoint.checkPrep():
@@ -566,14 +572,10 @@ def parse(con, str1, needTrace=False):
 
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                        password='postgres', host='localhost')
-s = Sentence()
-str1 = "Маленький мальчик хочет спать."
-s.setString(str1)
-s.morphParse()
-s.getGPatterns(con)
-res = s.sintParse()
+
 
 a1 =  parse(con, "Маленький мальчик хочет спать.")
+
 '''a1 = parse(con, "Ходить на работу.")
 
 
