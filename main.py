@@ -212,11 +212,19 @@ class ParsePointWord:
 class ParsePoint:
     directForIsApplicable = 1
 
-    def __init__(self, ppwl, cl, mark, cpw):
+    def __init__(self, ppwl, cl, mark, cpw, par, num):
         self.parsePointWordList = ppwl
         self.childParsePoint = cl
         self.markParsePoint = mark
         self.countParsedWords = cpw
+        self.parsed = par
+        self.numberPoint = num
+
+    def __repr__(self):
+        ans = str(self.numberPoint) + "----"
+        for i in self.parsed:
+            ans += str(i[0]) + "+" + str(i[1]) + ";"
+        return ans
 
     def getMark(self, parentMark):
         '''return mark of ParsePoint and count of parsed word in this ParsePoint'''
@@ -317,9 +325,13 @@ class ParsePoint:
         newGp = Gp(gPatternToApply, self.parsePointWordList[dependingPPWord].word)
         newWordList[mainPPWord].usedGp.append(newGp)
         newMark = self.markParsePoint + math.log(gPatternToApply.mark)
-        return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1)
+        newParsedList = copy.deepcopy(self.parsed)
+        newParsedList.append((mainPPWord, dependingPPWord))
+        newNumber = self.numberPoint + 1
+        return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber)
 
     def findFirstWord(self, fun):
+        numberChildPoint = self.numberPoint + 1
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
             listNewParsePoints = []
@@ -328,7 +340,8 @@ class ParsePoint:
                     newWordList = copy.deepcopy(self.parsePointWordList)
                     newWordList[i].parsed = True
                     newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
-                    newParsePoint = ParsePoint(newWordList, [], 0, 1)
+                    newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint)
+                    numberChildPoint += 1
                     listNewParsePoints.append(newParsePoint)
             if listNewParsePoints:
                 return (listNewParsePoints, [i])
@@ -444,6 +457,9 @@ class Sentence:
         self.firstParseWordsIndices = []  # слова, первые для разбора, в простых предложениях
         self.bestParsePoints = [] # хранится список точек разбора, упорядоченных по убыванию оценки
 
+    def __repr__(self):
+        return self.inputStr
+
     def setString(self, inputStr1):
         self.inputStr = inputStr1
         # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
@@ -472,7 +488,7 @@ class Sentence:
             curWord.getGPatterns(con)
 
     def getRootParsePoint(self):
-        self.rootPP = ParsePoint([], [], 0.0, 0)
+        self.rootPP = ParsePoint([], [], 0.0, 0, [], 0)
         for word in self.wordList:
             curParsePointWord = ParsePointWord()
             curParsePointWord.parsed = False
@@ -499,6 +515,8 @@ class Sentence:
 
     def insertNewParsePoint(self, newPoint):
         '''insert new ParsePoint into bestParsePoints'''
+        if newPoint.countParsedWords == len(self.wordList): #все слова уже разобраны, дочерних быть не может
+            return
         mark = newPoint.markParsePoint
         i = 0
         while i < len(self.bestParsePoints) and \
@@ -531,9 +549,37 @@ class Sentence:
     def checkConnectivity(self, curParsePoint):  # параметр - предложение
         return len(self.wordList) == self.countDependent(curParsePoint, self.firstParseWordsIndices[0])
 
-    def sintParse(self, needTrace=False):
-        if (needTrace):
-            tracePoints = []
+    def addNodeTree(self, G1, point, curNode):
+        for child in point.childParsePoint:
+            childName = child.__repr__()
+            G1.add_node(childName)
+            G1.add_edge(curNode, childName)
+            self.addNodeTree(G1, child, childName)
+
+    def visualizate(self):
+        '''visualizate tree of parse'''
+        G1 = nx.DiGraph()
+        root = self.rootPP
+        rootName = root.__repr__()
+        self.addNodeTree(G1, root, rootName)
+        pos = graphviz_layout(G1, prog='dot')
+        x_values, y_values = zip(*pos.values())
+        x_max = max(x_values)
+        x_min = min(x_values)
+        x_margin = (x_max - x_min) * 0.25
+        plt.xlim(x_min - x_margin, x_max + x_margin)
+        y_max = max(y_values)
+        y_min = min(y_values)
+        y_margin = (y_max - y_min) * 0.25
+        plt.ylim(y_min - y_margin, y_max + y_margin)
+        nx.draw(G1, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
+                verticalalignment='top', font_size=20)
+        plt.title(self.__repr__())
+        plt.show()
+
+
+
+    def sintParse(self):
         if (not self.rootPP):
             self.getRootParsePoint()
 
@@ -543,18 +589,12 @@ class Sentence:
             newPoint = bestParsePoint.getNewParsePoint()
             if (newPoint == None):
                 print("Не разобрано!")
-                if (needTrace):
-                    return (bestParsePoint, tracePoints)
-                return (bestParsePoint)
+                return bestParsePoint
             self.insertNewParsePoint(newPoint)
-            if (needTrace):
-                tracePoints.append(newPoint)
             #newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
             if newPoint.checkEndParse():
                 if newPoint.checkPrep():
-                    if (needTrace):
-                        return (newPoint, tracePoints)
-                    return (newPoint)
+                    return newPoint
 
 
 def parse(con, str1, needTrace=False):
@@ -562,21 +602,21 @@ def parse(con, str1, needTrace=False):
     s.setString(str1)
     s.morphParse()
     s.getGPatterns(con)
-    res = s.sintParse(needTrace)
+    res = s.sintParse()
     if (needTrace):
-        res[0].visualizate(s.firstParseWordsIndices)
-    else:
-        res.visualizate(s.firstParseWordsIndices)
-    return res
+        s.visualizate() # визуализация дерева построения
+    res.visualizate(s.firstParseWordsIndices)
+    return res.parsePointWordList
 
 
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                        password='postgres', host='localhost')
 
-
-a1 =  parse(con, "Маленький мальчик хочет спать.")
+a1 = parse(con, "Ходить на работу.", True)
+print(a1)
 
 '''a1 = parse(con, "Ходить на работу.")
+a1 =  parse(con, "Маленький мальчик хочет спать.",  True)
 
 
 s = Sentence()
