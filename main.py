@@ -2,8 +2,10 @@ import copy
 from Types import *
 from Functions import *
 import pymorphy2
+from Attempts_module import Attempts
 
 morph = pymorphy2.MorphAnalyzer()
+allPatternList = []
 import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import write_dot, graphviz_layout
@@ -20,13 +22,13 @@ class GPattern:
         self.mark = m
         self.info = ""  # ????
 
-
-class GPatternList:
-    def __init__(self):
-        self.firstLevel = []
-        self.secondLevel = []
-        self.thirdLevel = []
-
+    def __repr__(self):
+        s = str(self.level) + ":"
+        if self.level == 3:
+            s += " " + self.dependentWord
+        for c in self.dependentWordConstraints:
+            s += " " + c[1][1] + ";"
+        return s
 
 def extractFirstLevel(word, curMorph, con):
     s0 = "SELECT id FROM morph_constraints WHERE " + \
@@ -64,10 +66,10 @@ def extractFirstLevel(word, curMorph, con):
                 curProp = Morph.names[j - 2]
                 curConstr.append(((lambda m, cP, val: getattr(m, cP) == val), (curProp, cur[j])))
                 # print(curProp, cur[j])
-
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
-        firLev.append(curPatt)
+        if len(curConstr) > 0:
+            firLev.append(curPatt)
     cursor.close()
     return firLev
 
@@ -101,7 +103,7 @@ def extractSecondLevel(word, curMorph, con):
     ans = cursor.fetchall()
     secLev = []
     for cur in ans:
-        curPatt = GPattern(1)
+        curPatt = GPattern(2)
         curConstr = []
         # print("-------------")
         for j in range(2, 15):  # 13 - количество свойств в Morph
@@ -112,7 +114,8 @@ def extractSecondLevel(word, curMorph, con):
 
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
-        secLev.append(curPatt)
+        if len(curConstr) > 0:
+            secLev.append(curPatt)
     cursor.close()
     return secLev
 
@@ -147,7 +150,7 @@ def extractThirdLevel(word, curMorph, con):
     ans = cursor.fetchall()
     thirdLev = []
     for cur in ans:
-        curPatt = GPattern(1)
+        curPatt = GPattern(3)
         curConstr = []
         # print("-----------------")
         for j in range(2, 15):  # 13 - количество свойств в Morph
@@ -158,7 +161,8 @@ def extractThirdLevel(word, curMorph, con):
         curPatt.normalWord = cur[15]
         curPatt.dependentWordConstraints = curConstr
         curPatt.mark = cur[0]
-        thirdLev.append(curPatt)
+        if len(curConstr) > 0:
+            thirdLev.append(curPatt)
     cursor.close()
     return thirdLev
 
@@ -166,23 +170,31 @@ def extractThirdLevel(word, curMorph, con):
 class Word:
     def morphParse(self):
         p = morph.parse(self.word)
+        numberWord = self.numberInSentence
+        numberVariant = 0
+        curListNumbersVariants = []
         for curParse in p:
             m = parseToMorph(self.word, curParse)
             self.morph.append(m)
             self.normalWord.append(curParse.normal_form)
+            curListNumbersVariants.append((numberWord, numberVariant))
+            numberVariant += 1
+        return curListNumbersVariants
 
     def getGPatterns(self, con):
         for i in range(len(self.morph)):
             curMorph = self.morph[i]
             curNormal = self.normalWord[i]
-            curPatt = GPatternList()
+            curPatterns = []
             curFirst = extractFirstLevel(curNormal, curMorph, con)
             curSec = extractSecondLevel(curNormal, curMorph, con)
             curThird = extractThirdLevel(curNormal, curMorph, con)
-            curPatt.firstLevel += curFirst
-            curPatt.secondLevel += curSec
-            curPatt.thirdLevel += curThird
-            self.gPatterns.append(curPatt)
+            curPatterns += curThird
+            curPatterns += curSec
+            curPatterns += curFirst
+            self.gPatterns.append(curPatterns)
+        global allPatternList
+        allPatternList.append(self.gPatterns)
 
     def __init__(self, name="", number=-1):
         self.word = name  # у Одинцева Word
@@ -190,7 +202,7 @@ class Word:
         self.morph = []  # список объектов типа Morph
 
         # список морфологических характеристик для всех вариантов морф. анализа
-        self.gPatterns = []  # список из GPatternList, i элемент - для i morph
+        self.gPatterns = []  # список из списоков из Gpattern, i элемент - для i morph
         # с помощью морф.анализатора заполняем morph, с помощью базы - GPatterns
         self.numberInSentence = number
 
@@ -212,16 +224,17 @@ class ParsePointWord:
 class ParsePoint:
     directForIsApplicable = 1
 
-    def __init__(self, ppwl, cl, mark, cpw, par, num):
+    def __init__(self, ppwl, cl, mark, cpw, par, num, att):
         self.parsePointWordList = ppwl
         self.childParsePoint = cl
         self.markParsePoint = mark
         self.countParsedWords = cpw
         self.parsed = par
         self.numberPoint = num
+        self.attempts = att
 
     def __repr__(self):
-        ans = str(self.numberPoint) + "----"
+        ans = str(self.numberPoint) + ":"
         for i in self.parsed:
             ans += str(i[0]) + "+" + str(i[1]) + ";"
         return ans
@@ -261,18 +274,16 @@ class ParsePoint:
                 return False
         return True
 
-    def checkWord(self, depWord,
+    def checkWord(self, depWord, parseVariant,
                   gPattern):  # на вход - потенциальное зависимое слово(или потенциальный предлог), модель управления
-        #  в какой морф.форме может быть зав.словом, None - не может быть
+        #  Удовлетворяет ли требованиям данный вариант разбора данного слова
         constr = gPattern.dependentWordConstraints
-        ans = 0
-        for i in range(len(depWord.morph)):
-            morph = depWord.morph[i]
-            nw = depWord.normalWord[i]
-            if gPattern.level != 3 or (gPattern.level == 3 and gPattern.normalWord == nw):
-                if (self.checkMorph(morph, constr)):
-                    return morph
-        return None
+        morphForm = depWord.morph[parseVariant]
+        normal = depWord.normalWord[parseVariant]
+        if gPattern.level != 3 or (gPattern.level == 3 and gPattern.normalWord == normal):
+            if (self.checkMorph(morphForm, constr)):
+                return True
+        return False
 
     def rightMove(self, mainPPWord, gPatternToApply):
 
@@ -317,7 +328,7 @@ class ParsePoint:
                 return (True, numberDep, morphForm)
             return self.rightMove(mainPPWord, gPatternToApply)
 
-    def apply(self, mainPPWord, dependingPPWord, usedMorphAnswer, gPatternToApply):
+    def apply(self, mainPPWord, dependingPPWord, usedMorphAnswer, gPatternToApply, maxNumberPoint):
         '''create and return new child ParsePoint'''
         newWordList = copy.deepcopy(self.parsePointWordList)
         newWordList[dependingPPWord].parsed = True
@@ -327,65 +338,52 @@ class ParsePoint:
         newMark = self.markParsePoint + math.log(gPatternToApply.mark)
         newParsedList = copy.deepcopy(self.parsed)
         newParsedList.append((mainPPWord, dependingPPWord))
-        newNumber = self.numberPoint + 1
-        return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber)
+        newNumber = maxNumberPoint + 1
+        newAttempts = copy.deepcopy(self.attempts)
+        newAttempts.apply()
+        return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber, newAttempts)
 
-    def findFirstWord(self, fun):
+    def findFirstWord(self, fun, listNumbersVariants):
         numberChildPoint = self.numberPoint + 1
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
             listNewParsePoints = []
-            for curMorph in curPointWord.word.morph:
+            for j in range(len(curPointWord.word.morph)):
+                curMorph = curPointWord.word.morph[j]
                 if fun(curMorph):
                     newWordList = copy.deepcopy(self.parsePointWordList)
                     newWordList[i].parsed = True
                     newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
-                    newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint)
+                    curListNumberVariants = copy.deepcopy(listNumbersVariants)
+                    curListNumberVariants = list(filter(lambda x:x[0] != i, curListNumberVariants))
+                    att = Attempts([(i, j)], curListNumberVariants, allPatternList)
+                    newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint, att)
                     numberChildPoint += 1
                     listNewParsePoints.append(newParsePoint)
             if listNewParsePoints:
                 return (listNewParsePoints, [i])
         return None
 
-    def getNewParsePoint(self):
+    def getNewParsePoint(self, maxNumberPoint):
         '''create new ParsePoint, child for self'''
-        parsed = []
-        for i in range(len(self.parsePointWordList)):
-            curPointWord = self.parsePointWordList[i]
-            if (curPointWord.parsed == True):
-                parsed.append(i)
-        bestMainWord = -1
-        bestDepWord = -1
-        usedDepMorph = Morph()
-        bestModel = GPattern()
-        bestModelMark = 0
-        for i in parsed:
-            curParsedPoint = self.parsePointWordList[i]
-            curWord = curParsedPoint.word
-            chooseVarMorph = curParsedPoint.usedMorphAnswer
-            models = None
-            for j in range(len(curWord.morph)):
-                if (curWord.morph[j] == chooseVarMorph):
-                    models = curWord.gPatterns[j]
-                    break
-            if (models != None):
-                for curModel in (models.thirdLevel + models.secondLevel + models.firstLevel):
-                    (canApply, depWord, morphDepWord) = self.isApplicable(i, curModel)
-                    if (canApply and curModel.mark > bestModelMark):  # !!!!!
-                        bestModelMark = curModel.mark
-                        bestModel = copy.deepcopy(curModel)
-                        bestMainWord = i
-                        bestDepWord = depWord
-                        usedDepMorph = morphDepWord
-        if (bestModelMark != 0):
-            newParsePoint = self.apply(bestMainWord, bestDepWord, usedDepMorph, bestModel)
-            self.childParsePoint.append(newParsePoint)
-            return newParsePoint
-        print("No model")
-        return None
+        while True:
+            ans = self.attempts.get()
+            if ans == None:
+                return None
+            (potMain, potPattern, potDep, potDepParseVariant) = ans
+            depWord = self.parsePointWordList[potDep].word
+            if self.checkWord(depWord, potDepParseVariant, potPattern):
+                usedDepMorph = depWord.morph[potDepParseVariant]
+                newParsePoint = self.apply(potMain, potDep, usedDepMorph, potPattern, maxNumberPoint)
+                self.childParsePoint.append(newParsePoint)
+                self.attempts.next()
+                return (newParsePoint, potPattern)
+            self.attempts.next()
+
 
     def checkEndParse(self):
         '''check that all words in this ParsePoint are parsed'''
+        # вроде достаточно проверять self.attempts.flagEnd
         for curPointWord in self.parsePointWordList:
             if (curPointWord.parsed == False):
                 return False
@@ -456,6 +454,9 @@ class Sentence:
         self.rootPP = None  # заполняется потом, с помощью getRootParsePoint
         self.firstParseWordsIndices = []  # слова, первые для разбора, в простых предложениях
         self.bestParsePoints = [] # хранится список точек разбора, упорядоченных по убыванию оценки
+        self.listNumberWords = [] # хранится список элементов вида [(номер слова, номер варианта его разбора )]
+        self.graph = nx.DiGraph()# хранится граф (networkx)
+        self.maxNumberParsePoint = 0
 
     def __repr__(self):
         return self.inputStr
@@ -477,41 +478,49 @@ class Sentence:
             elif (i != '-' or (len(curWord) != 0)):  # - и непустое слово -  это дефис
                 curWord = curWord + i
         if (len(curWord) != 0):
-            self.wordList.append(Word(curWord.lower()), numberWord)
+            self.wordList.append(Word(curWord.lower(), numberWord))
 
     def morphParse(self):
         for curWord in self.wordList:
-            curWord.morphParse()
+            curListNumbersVariants = curWord.morphParse()
+            self.listNumberWords += curListNumbersVariants
 
     def getGPatterns(self, con):
         for curWord in self.wordList:
             curWord.getGPatterns(con)
 
     def getRootParsePoint(self):
-        self.rootPP = ParsePoint([], [], 0.0, 0, [], 0)
+        self.rootPP = ParsePoint([], [], 0.0, 0, [], 0, None)
+        rootName = self.rootPP.__repr__()
+        self.graph.add_node(rootName)
         for word in self.wordList:
             curParsePointWord = ParsePointWord()
             curParsePointWord.parsed = False
             curParsePointWord.word = word
             self.rootPP.parsePointWordList.append(curParsePointWord)
-        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb')
+        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb', self.listNumberWords)
         if verbRes:
             (listNewParsePoints, firstWords) = verbRes
         else:
             # в предложении нет глагола
-            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative')
+            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', self.listNumberWords)
             if nounRes:
                 (listNewParsePoints, firstWords) = nounRes
             else:
-                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition')
+                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition', self.listNumberWords)
                 if prepRes:
                     (listNewParsePoints, firstWords) = prepRes
                 else:
                     print("В предложении нет глагола, сущ в И.п, предлога")
                     sys.exit()
         self.rootPP.childParsePoint = listNewParsePoints
+        self.maxNumberParsePoint = len(listNewParsePoints) # есть корневая точка и len(listNewParsePoints) ее дочерних,
         self.firstParseWordsIndices = firstWords
         self.bestParsePoints = listNewParsePoints
+        for curChild in listNewParsePoints:
+            childName = curChild.__repr__()
+            self.graph.add_node(childName)
+            self.graph.add_edge(rootName, childName, n = "")
 
     def insertNewParsePoint(self, newPoint):
         '''insert new ParsePoint into bestParsePoints'''
@@ -549,20 +558,10 @@ class Sentence:
     def checkConnectivity(self, curParsePoint):  # параметр - предложение
         return len(self.wordList) == self.countDependent(curParsePoint, self.firstParseWordsIndices[0])
 
-    def addNodeTree(self, G1, point, curNode):
-        for child in point.childParsePoint:
-            childName = child.__repr__()
-            G1.add_node(childName)
-            G1.add_edge(curNode, childName)
-            self.addNodeTree(G1, child, childName)
 
     def visualizate(self):
         '''visualizate tree of parse'''
-        G1 = nx.DiGraph()
-        root = self.rootPP
-        rootName = root.__repr__()
-        self.addNodeTree(G1, root, rootName)
-        pos = graphviz_layout(G1, prog='dot')
+        pos = graphviz_layout(self.graph, prog='dot')
         x_values, y_values = zip(*pos.values())
         x_max = max(x_values)
         x_min = min(x_values)
@@ -572,8 +571,10 @@ class Sentence:
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
         plt.ylim(y_min - y_margin, y_max + y_margin)
-        nx.draw(G1, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
-                verticalalignment='top', font_size=20)
+        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
+                verticalalignment='top', font_size=10)
+        grafo_labels = nx.get_edge_attributes(self.graph, 'n')
+        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels = grafo_labels, label_pos=0.5, rotate = False)
         plt.title(self.__repr__())
         plt.show()
 
@@ -586,15 +587,24 @@ class Sentence:
         while (1):
             bestParsePoint = self.getBestParsePoint()
             #bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
-            newPoint = bestParsePoint.getNewParsePoint()
-            if (newPoint == None):
-                print("Не разобрано!")
-                return bestParsePoint
-            self.insertNewParsePoint(newPoint)
-            #newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
-            if newPoint.checkEndParse():
-                if newPoint.checkPrep():
-                    return newPoint
+            res = bestParsePoint.getNewParsePoint(self.maxNumberParsePoint)
+            print(res)
+            if (res == None):
+                if len(self.bestParsePoints) > 1:
+                    self.bestParsePoints = self.bestParsePoints[1:]
+                else:
+                    print("Не разобрано!")
+                    return bestParsePoint
+            else:
+                (newPoint, pattern) = res
+                self.maxNumberParsePoint += 1
+                self.graph.add_node(newPoint.__repr__())
+                self.graph.add_edge(bestParsePoint.__repr__(), newPoint.__repr__(), n = pattern.__repr__())
+                self.insertNewParsePoint(newPoint)
+                #newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
+                if newPoint.checkEndParse():
+                    if newPoint.checkPrep():
+                        return newPoint
 
 
 def parse(con, str1, needTrace=False):
@@ -611,14 +621,13 @@ def parse(con, str1, needTrace=False):
 
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                        password='postgres', host='localhost')
+str1 = "Ходят на работу люди взрослые."
 
-a1 = parse(con, "Ходить на работу.", True)
+a1 = parse(con, str1, True)
 print(a1)
 
 '''a1 = parse(con, "Ходить на работу.")
 a1 =  parse(con, "Маленький мальчик хочет спать.",  True)
-
-
 s = Sentence()
 str1 = "Взрослые люди ходят на работу."
 s.setString(str1)
