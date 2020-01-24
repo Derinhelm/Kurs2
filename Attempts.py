@@ -1,4 +1,6 @@
 from bisect import bisect
+import copy
+from main import *
 
 class MainWords:
     def __init__(self, mw):
@@ -59,11 +61,17 @@ class DepWords:
         self.curDep = self.depWords[self.pointCurDep]
 
 class Attempts:
-    def __init__(self, mw, pat, dep):
+    def __init__(self, mw, dep, pat):
+        self.allPatterns = pat # список моделей управления для всех слов в предложении
         self.main = MainWords(mw)
-        self.patterns = Patterns(pat)# модели управления для self.curMain
+        self.patterns = Patterns(self.allPatterns[self.curMain])#модели управления для текущего главного слова
         self.dep = DepWords(dep, self.main.curMain)
 
+    def __copy__(self):
+        newM = copy.deepcopy(self.main)
+        newD = copy.deepcopy(self.main)
+        newObj = Attempts(newM, newD, self.patterns)
+        return newObj
 
     def next(self):
         newDep = self.dep.next()
@@ -75,6 +83,18 @@ class Attempts:
             return (self.main.curMain, newPattern, self.dep.curDep)
         newMain = self.main.next()
         if newMain != None:
-            # загрузить новые модели
+            self.patterns = Patterns(self.allPatterns[self.curMain])
             self.dep.next()
         return None
+
+
+con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                       password='postgres', host='localhost')
+
+str1 = "Шла на работу"
+s = Sentence()
+s.setString(str1)
+s.morphParse()
+s.getGPatterns(con)
+
+a = Attempts([], [0, 1, 2], )
