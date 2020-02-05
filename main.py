@@ -341,7 +341,7 @@ class ParsePoint:
         newAttempts.apply()
         return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber, newAttempts)
 
-    def findFirstWord(self, fun, listNumbersVariants, allPatternListParam):
+    def findFirstWord(self, fun, listNumbersVariants, allPatternsListParam):
         numberChildPoint = self.numberPoint + 1
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
@@ -354,7 +354,8 @@ class ParsePoint:
                     newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
                     curListNumberVariants = copy.deepcopy(listNumbersVariants)
                     curListNumberVariants = list(filter(lambda x:x[0] != i, curListNumberVariants))
-                    att = Attempts([(i, j)], curListNumberVariants, allPatternListParam)
+                    patternsCurVariant = newWordList[i].word.gPatterns[j]
+                    att = Attempts([(i, j)], patternsCurVariant, curListNumberVariants, allPatternsListParam)
                     newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint, att)
                     numberChildPoint += 1
                     listNewParsePoints.append(newParsePoint)
@@ -455,9 +456,9 @@ class Sentence:
         self.listNumberWords = [] # хранится список элементов вида [(номер слова, номер варианта его разбора )]
         self.graph = nx.DiGraph()# хранится граф (networkx)
         self.maxNumberParsePoint = 0
-        self.allPatternList = []
+        self.allPatternsList = []
         # список вида [[модели управления]], для каждого варианта разбора каждого слова храним его возможные модели управления
-        # j элементе i элемента allPatternList - список моделей управления для j варианта разбора i слова
+        # j элементе i элемента allPatternsList - список моделей управления для j варианта разбора i слова
 
     def __repr__(self):
         return self.inputStr
@@ -489,7 +490,7 @@ class Sentence:
     def getGPatterns(self, con):
         for curWord in self.wordList:
             listPatternsForVariants = curWord.getGPatterns(con)
-            self.allPatternList.append(listPatternsForVariants)
+            self.allPatternsList.append(listPatternsForVariants)
 
     def getRootParsePoint(self):
         self.rootPP = ParsePoint([], [], 0.0, 0, [], 0, None)
@@ -500,16 +501,16 @@ class Sentence:
             curParsePointWord.parsed = False
             curParsePointWord.word = word
             self.rootPP.parsePointWordList.append(curParsePointWord)
-        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb', self.listNumberWords, self.allPatternList)
+        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb', self.listNumberWords, self.allPatternsList)
         if verbRes:
             (listNewParsePoints, firstWords) = verbRes
         else:
             # в предложении нет глагола
-            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', self.listNumberWords, self.allPatternList)
+            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', self.listNumberWords, self.allPatternsList)
             if nounRes:
                 (listNewParsePoints, firstWords) = nounRes
             else:
-                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition', self.listNumberWords, self.allPatternList)
+                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition', self.listNumberWords, self.allPatternsList)
                 if prepRes:
                     (listNewParsePoints, firstWords) = prepRes
                 else:

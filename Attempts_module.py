@@ -1,22 +1,5 @@
 import copy
 
-
-class MainWords:
-    def __init__(self, mw):
-        self.pointCurMain = 0
-        self.mainWords = mw # номера потенциальных главных слов
-        self.curMain = self.mainWords[self.pointCurMain]# номер тек.главного
-
-    def add(self, newMain):
-        self.mainWords.append(newMain)
-
-    def next(self):
-        self.pointCurMain += 1
-        if self.pointCurMain == len(self.mainWords):
-            return None
-        self.curMain = self.mainWords[self.pointCurMain]
-        return self.curMain
-
 class Patterns:
     def __init__(self, p):
         self.patterns = p
@@ -29,6 +12,63 @@ class Patterns:
             return None
         self.curPatt = self.patterns[self.pointCurPatt]
         return self.curPatt
+
+    def getPattern(self):
+        return self.curPatt
+
+class MainWords:
+    def __init__(self, mw, pats, allPatternsListParam):
+        # pats - модели управления данного варианта данного слова
+        self.pointCurMain = 0
+        extMainWordsList = []
+        for curMainVariant in mw:
+            curPatterns = Patterns(pats)
+            extMainWordsList.append((curMainVariant[0], curMainVariant[1], curPatterns))
+        self.mainWords = extMainWordsList # номера потенциальных главных слов
+        # список вида [(номер разобранного слова, номер варианта разбора этого слова, Patterns для данного варианта разбора слова)]
+        self.curMain = self.mainWords[self.pointCurMain]# номер тек.главного
+        self.allPatternsList = allPatternsListParam
+
+    def add(self, newMain):
+        curMain = newMain[0]
+        curVariant = newMain[1]
+        patternsNewMain = Patterns(self.allPatternsList[curMain][curVariant])
+        extMainVariant = (curMain, curVariant, patternsNewMain)
+
+        #Здесь можно менять, в какое место будет вставлено новое главное
+        # продолжаем разбор с нового разобранного
+        #self.mainWords.insert(self.pointCurMain, extMainVariant)
+        #self.curMain = self.mainWords[self.pointCurMain]
+
+        # новое - в конец
+        self.mainWords.append(extMainVariant)
+
+
+    def nextMain(self):
+        self.pointCurMain += 1
+        if self.pointCurMain == len(self.mainWords):
+            return None
+        self.curMain = self.mainWords[self.pointCurMain]
+        return self.curMain
+
+    def nextPatternOrMain(self):
+        newPattern = self.curMain[2].next() # обращаемся к Patterns текущего варианта разбора главного слова
+        if newPattern != None:
+            return newPattern
+        newMain = self.nextMain()
+        if newMain != None:
+            return newMain
+        self.flagEnd = True
+        return None
+
+    def getPattern(self):
+        return self.curMain[2].getPattern()
+
+    def getMain(self):
+        return self.curMain[0]
+
+    def getMainVariant(self):
+        return self.curMain[1]
 
 class DepWords:
     def __init__(self, dep, curMain):
@@ -107,10 +147,8 @@ class DepWords:
 
 
 class Attempts:
-    def __init__(self, mw, dep, apl):
-        self.main = MainWords(mw)
-        self.allPatternList = apl
-        self.patterns = Patterns(self.allPatternList[self.main.curMain[0]][self.main.curMain[1]]) #модели управления для текущего главного слова
+    def __init__(self, mw, patsForMain, dep, allPatternsListParam):
+        self.main = MainWords(mw, patsForMain, allPatternsListParam)
         self.dep = DepWords(dep, self.main.curMain[0])
         self.flagEnd = False
 
@@ -121,25 +159,14 @@ class Attempts:
         newDep = self.dep.next()
         if newDep != None:
             return
-        self.nextPatternOrMain()
-
-    def nextPatternOrMain(self):
-        newPattern = self.patterns.next()
-        if newPattern != None:
+        res = self.main.nextPatternOrMain()
+        if res != None:
             self.dep.reset()
-            return
-        newMain = self.main.next()
-        if newMain != None:
-            self.patterns = Patterns(self.allPatternList[self.main.curMain[0]][self.main.curMain[1]])
-            self.dep.reset()
-            return
-        self.flagEnd = True
-        return
 
     def get(self):
         if self.flagEnd:
             return None
-        return (self.main.curMain[0], self.patterns.curPatt, self.dep.curDep[0], self.dep.curDep[1])
+        return (self.main.getMain(), self.main.getPattern(), self.dep.curDep[0], self.dep.curDep[1])
 
     def apply(self):
         '''curDep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым'''
@@ -152,4 +179,6 @@ class Attempts:
             resChangeDirect = self.dep.changeDirect()
             if resChangeDirect == None:
                 # не вышло поменять направление - надо менять модель или главное
-                self.nextPatternOrMain()
+                res = self.main.nextPatternOrMain()
+                if res != None:
+                    self.dep.reset()
