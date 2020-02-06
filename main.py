@@ -24,7 +24,7 @@ class GPattern:
     def __repr__(self):
         s = str(self.level) + ":"
         if self.level == 3:
-            s += " " + self.dependentWord
+            s += " " + self.normalWord
         for c in self.dependentWordConstraints:
             s += " " + c[1][1] + ";"
         return s
