@@ -222,7 +222,7 @@ class ParsePointWord:
 class ParsePoint:
     directForIsApplicable = 1
 
-    def __init__(self, ppwl, cl, mark, cpw, par, num, att):
+    def __init__(self, ppwl, cl, mark, cpw, par, num, att, g):
         self.parsePointWordList = ppwl
         self.childParsePoint = cl
         self.markParsePoint = mark
@@ -230,6 +230,7 @@ class ParsePoint:
         self.parsed = par
         self.numberPoint = num
         self.attempts = att
+        self.graph = g# хранится граф (networkx)
 
     def __repr__(self):
         ans = str(self.numberPoint) + ":"
@@ -339,7 +340,12 @@ class ParsePoint:
         newNumber = maxNumberPoint + 1
         newAttempts = copy.deepcopy(self.attempts)
         newAttempts.apply()
-        return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber, newAttempts)
+        newGraph = copy.deepcopy(self.graph)
+        depWord = self.parsePointWordList[dependingPPWord].word.word + "_" + str(dependingPPWord)
+        mainWord = self.parsePointWordList[mainPPWord].word.word + "_" + str(mainPPWord)
+        newGraph.add_node(depWord)
+        newGraph.add_edge(mainWord, depWord)
+        return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber, newAttempts, newGraph)
 
     def findFirstWord(self, fun, listNumbersVariants, allPatternsListParam):
         numberChildPoint = self.numberPoint + 1
@@ -356,7 +362,10 @@ class ParsePoint:
                     curListNumberVariants = list(filter(lambda x:x[0] != i, curListNumberVariants))
                     patternsCurVariant = newWordList[i].word.gPatterns[j]
                     att = Attempts([(i, j)], patternsCurVariant, curListNumberVariants, allPatternsListParam)
-                    newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint, att)
+                    g = nx.DiGraph()# хранится граф (networkx)
+                    newNodeName = curPointWord.word.word + "_" + str(i)
+                    g.add_node(newNodeName)
+                    newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint, att, g)
                     numberChildPoint += 1
                     listNewParsePoints.append(newParsePoint)
             if listNewParsePoints:
@@ -401,36 +410,11 @@ class ParsePoint:
                     return False
         return True
 
-    def addEdge(self, depth, newParsePointWordList, G1, shiftX, nameMainWord):
-        # добавляет в граф новую зависимую вершину и новую связь!
-        # depth - глубина
-        # shiftX - смещение по х всего блока точек,зависимых от данного
-        for i in range(len(newParsePointWordList)):
-            newParsePointWord = newParsePointWordList[i]
-            newPointName = newParsePointWord.depWord.word
-            G1.add_node(newPointName)
-            G1.add_edge(nameMainWord, newPointName)
-            depWordText = newParsePointWord.depWord
-            depWord1 = newParsePointWord.depWord
-            depWordInd = depWord1.numberInSentence
-            if (len(self.parsePointWordList[depWordInd].usedGp) != 0):
-                self.addEdge(depth + 1, self.parsePointWordList[depWordInd].usedGp, G1, i * 7, newPointName)
-
-    def visualizate(self, firstIndices, name = ""):
-        G1 = nx.Graph()
-        if not firstIndices:
-            for cur in self.parsePointWordList:
-                text = cur.word.word
-                # установить их потом!!!
-                G1.add_node(text)
-        else:
-            begin = firstIndices[0]
-            parse1 = self.parsePointWordList[begin].usedGp
-            textMainWord = self.parsePointWordList[begin].word.word
-            # установить их потом!!!
-            G1.add_node(textMainWord)
-            self.addEdge(1, parse1, G1, 0, textMainWord)
-        pos = graphviz_layout(G1, prog='dot')
+    def visualizate(self, name = ""):
+        global numberWindows
+        numberWindows += 1
+        fig = plt.figure(numberWindows)
+        pos = graphviz_layout(self.graph, prog='dot')
         x_values, y_values = zip(*pos.values())
         x_max = max(x_values)
         x_min = min(x_values)
@@ -440,10 +424,37 @@ class ParsePoint:
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
         plt.ylim(y_min - y_margin, y_max + y_margin)
-        nx.draw(G1, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
+        fig.canvas.mpl_connect('button_press_event', lambda event: onMouseClickParsePoint(event, self, pos))
+        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
                 verticalalignment='top', font_size=20)
-        plt.title(name)
+        if name:
+            plt.title(name)
+        else:
+            plt.title(self.__repr__())
         plt.show()
+
+def onMouseClickParsePoint(event, parsePoint, pos):
+    # type: (matplotlib.backend_bases.MouseEvent) -> None
+    # Координаты клика в системе координат осей
+    x = event.xdata
+    y = event.ydata
+    near_word = ""
+    min_dist_2 = 100000000000
+    for (word, (x_word, y_word)) in pos.items():
+        cur_dist_2 = (x_word - x) ** 2 + (y_word - y) ** 2
+        if cur_dist_2 < min_dist_2:
+            near_word = word
+            min_dist_2 = cur_dist_2
+    wordBorder = near_word.rfind('_')
+    numberWord = int(near_word[wordBorder+ 1:])
+    textWord = near_word[:wordBorder]
+    w = textWord + ' - ' + parsePoint.parsePointWordList[numberWord].usedMorphAnswer.__repr__()
+    global numberWindows
+    numberWindows += 1
+    plt.figure(numberWindows, figsize=(0.5 + 0.12 * len(w),0.5)) # потом сделать возможность нескольких окон
+    plt.axis('off')
+    plt.text(0, 0.5, w, size = 15)
+    plt.show()
 
 
 class Sentence:
@@ -456,6 +467,7 @@ class Sentence:
         self.listNumberWords = [] # хранится список элементов вида [(номер слова, номер варианта его разбора )]
         self.graph = nx.DiGraph()# хранится граф (networkx)
         self.maxNumberParsePoint = 0
+        self.dictParsePoints = {} # словарь соответствия названия точки разбора и точки разбора
         self.allPatternsList = []
         # список вида [[модели управления]], для каждого варианта разбора каждого слова храним его возможные модели управления
         # j элементе i элемента allPatternsList - список моделей управления для j варианта разбора i слова
@@ -493,9 +505,10 @@ class Sentence:
             self.allPatternsList.append(listPatternsForVariants)
 
     def getRootParsePoint(self):
-        self.rootPP = ParsePoint([], [], 0.0, 0, [], 0, None)
+        self.rootPP = ParsePoint([], [], 0.0, 0, [], 0, None, None)
         rootName = self.rootPP.__repr__()
         self.graph.add_node(rootName)
+        self.dictParsePoints[rootName] = self.rootPP
         for word in self.wordList:
             curParsePointWord = ParsePointWord()
             curParsePointWord.parsed = False
@@ -524,6 +537,7 @@ class Sentence:
             childName = curChild.__repr__()
             self.graph.add_node(childName)
             self.graph.add_edge(rootName, childName, n = "")
+            self.dictParsePoints[childName] = curChild
 
     def insertNewParsePoint(self, newPoint):
         '''insert new ParsePoint into bestParsePoints'''
@@ -564,6 +578,9 @@ class Sentence:
 
     def visualizate(self):
         '''visualizate tree of parse'''
+        global numberWindows
+        numberWindows += 1
+        fig = plt.figure(numberWindows)
         pos = graphviz_layout(self.graph, prog='dot')
         x_values, y_values = zip(*pos.values())
         x_max = max(x_values)
@@ -574,10 +591,12 @@ class Sentence:
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
         plt.ylim(y_min - y_margin, y_max + y_margin)
+        fig.canvas.mpl_connect('button_press_event', lambda event: onMouseClickTree(event, self.dictParsePoints, pos))
+        nx.draw_networkx_nodes(self.graph, pos, node_size=500, with_labels = True, node_color = 'silver')
         nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
-                verticalalignment='top', font_size=10)
+                verticalalignment='top', font_size=10, font_color='b')
         grafo_labels = nx.get_edge_attributes(self.graph, 'n')
-        nx.draw_networkx_edge_labels(self.graph, pos, edge_labels = grafo_labels, label_pos=0.5, rotate = False)
+        nx.draw_networkx_edge_labels(self.graph, pos, font_size=10, edge_labels = grafo_labels, label_pos=0.5, rotate = False)
         plt.title(self.__repr__())
         plt.show()
 
@@ -601,14 +620,50 @@ class Sentence:
             else:
                 (newPoint, pattern) = res
                 self.maxNumberParsePoint += 1
-                self.graph.add_node(newPoint.__repr__())
+                newPointName = newPoint.__repr__()
+                self.graph.add_node(newPointName)
                 self.graph.add_edge(bestParsePoint.__repr__(), newPoint.__repr__(), n = pattern.__repr__())
+                self.dictParsePoints[newPointName] = newPoint
                 self.insertNewParsePoint(newPoint)
                 #newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
                 if newPoint.checkEndParse():
                     if newPoint.checkPrep():
                         return newPoint
 
+def onMouseClickTree(event, dictParsePoints, pos):
+    # type: (matplotlib.backend_bases.MouseEvent) -> None
+    axes = event.inaxes
+
+    # В качестве текущих выберем оси, внутри которых кликнули мышью
+    plt.sca(axes)
+
+    # Координаты клика в системе координат осей
+    x = event.xdata
+    y = event.ydata
+
+    near_point = ""
+    min_dist_2 = 100000000000
+    for (word, (x_word, y_word)) in pos.items():
+        cur_dist_2 = (x_word - x) ** 2 + (y_word - y) ** 2
+        if cur_dist_2 < min_dist_2:
+            near_point = word
+            min_dist_2 = cur_dist_2
+    dictParsePoints[near_point].visualizate()
+    plt.show()
+
+numberWindows = 0
+
+class WordResult:
+    def __init__(self, p, mf, w, gps):
+        self.parsed = p
+        self.morfForm = mf
+        self.word = w
+        self.usedGPatterns = gps
+
+    def __repr__(self):
+        if self.parsed:
+            return self.word + ":" + self.morfForm.__repr__()
+        return "Не разобрано"
 
 def parse(con, str1, needTrace=False):
     s = Sentence()
@@ -618,17 +673,51 @@ def parse(con, str1, needTrace=False):
     res = s.sintParse()
     if (needTrace):
         s.visualizate() # визуализация дерева построения
-    res.visualizate(s.firstParseWordsIndices)
-    return res.parsePointWordList
+    res.visualizate("график")
+    ans = []
+    for curWord in res.parsePointWordList:
+        curResult = WordResult(curWord.parsed, curWord.usedMorphAnswer, curWord.word.word, curWord.usedGp)
+        ans.append(curResult)
+    return ans
 
 
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                        password='postgres', host='localhost')
-str1 = "Ходят на работу люди взрослые."
-
+#str1 = "Ходят на работу люди взрослые."
+str1 = "Ходят на тяжелую работу."
 a1 = parse(con, str1, True)
-print(a1)
+for i in a1:
+    print(i)
+#a1 = parse(con, "Идти домой с мамой .", True)
 
+#a1 = parse(con, "Студенты замерзли на лекции.", True)
+
+#a1 = parse(con, "Заяц поздней осенью меняет серую шубу на белую.", True)
+
+#a1 = parse(con, str1, True)
+'''
+a1 = parse(con, "Я прочел до середины список кораблей.", True)
+a1 = parse(con, "Вязнут расписные спицы в расхлябанные колеи.", True)
+a1 = parse(con, "Ковыли с вековою тоскою пригнулись к земле.", True)
+a1 = parse(con, "К метро шли долго.", True)
+a1 = parse(con, "Студенты замерзли на лекции.", True)
+a1 = parse(con, "Ты стал очень хорошим человеком.", True)
+
+
+a1 = parse(con, "Ты будешь сок?", True)
+a1 = parse(con, "Все счастливые семьи счастливы по-своему.", True)
+a1 = parse(con, "Осень поражает нас своими непрерывными изменениями.", True)
+a1 = parse(con, "Вещи, потерянные нами,c обязательно вернутся к нам!.", True)
+
+
+a1 = parse(con, "Моя ладонь превратилась в кулак.", True)
+
+a1 = parse(con, "Счастье можно найти даже в темные времена.", True)
+
+a1 = parse(con, "Дети поздно пришли домой.", True)
+a1 = parse(con, "На штурм.", True)
+print(a1)
+'''
 '''a1 = parse(con, "Ходить на работу.")
 a1 =  parse(con, "Маленький мальчик хочет спать.",  True)
 s = Sentence()
@@ -677,5 +766,8 @@ a1 = parse(con, "Звезды.", True)
 
 # a1 = parse(con, "Дети поздно пришли домой.", True)  плохо
 # a1 = parse(con, "На штурм.", True)  плохо главное дб НА
+
+#a1 = parse(con, "Принесет с собой.", True)
+#a1 = parse(con, "Приведет с собой.", True)
 
 # print(a1)

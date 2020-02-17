@@ -40,7 +40,28 @@ tense = {'pres': 'present','past':'past', 'futr': 'future', \
         'None':'tense_any', 'inf': 'infinitive', 'imp':'imperative'}
 voice = {'actv':'active', 'pssv': 'passive', 'None':'voice_any'}
 
-
+dictField = {'noun':'s_cl', 'adjective':'s_cl', 'shortadjective':'s_cl', \
+        'comparative':'s_cl', 'verb':'s_cl', 'verb':'s_cl', 'participle':'s_cl',\
+        'shortparticiple':'s_cl', 'gerund':'s_cl', 'number':'s_cl', \
+        'adverb':'s_cl', 'pronoun':'s_cl', 'predicative':'s_cl', \
+        'preposition':'s_cl', 'conjunction':'s_cl', 'particle':'s_cl', \
+        'interjection':'s_cl', 's_cl_any':'s_cl', \
+        'animate':'animate', 'unanimate':'animate', 'animate_any':'animate', \
+        'male':'gender', 'female':'gender', 'neuter':'gender', 'malefemale':'gender', 'gender_any':'gender', \
+        'single':'number', 'plural':'number', 'number_any':'number', \
+        'nominative':'case_morph', 'genitive':'case_morph', 'dative':'case_morph', \
+        'accusative':'case_morph', 'instrumental':'case_morph', 'prepositional':'case_morph',\
+        'case_any':'case_morph', 'prepositional':'case_morph', 'genitive':'case_morph', \
+        'reflexive':'reflection', 'unreflexive':'reflection', 'reflexiveForm':'reflection', 'reflectionAny':'reflection', \
+        'perfective':'perfective', 'unperfective':'perfective', 'perfective_any':'perfective', \
+        'transitive':'transitive', 'untransitive':'transitive', 'transitive_any':'transitive', \
+        'first':'person', 'second':'person', 'third':'person', 'person_any':'person', \
+        'present':'tense','past':'tense', 'future':'tense', 'tense_any':'tense', \
+        'infinitive':'tense', 'imperative':'tense', \
+        'active':'voice', 'passive':'voice', 'voice_any':'voice', \
+        'true':'static', 'false':'static', \
+        'strong':'static', 'weak':'static', 'degree_any':'static'
+       }
 
 NUMBER_PARAMETRS = 13
 
@@ -66,6 +87,15 @@ class Morph: # для хранения морфологических харак
         self.voice = v
         self.degree = deg
         self.static = stat
+
+    def __repr__(self):
+        s = ""
+        for curName in self.names:
+            value = getattr(self, curName)
+            if value != 'not_imp' and value.count("_any") == 0:
+                s += value + ","
+        return s
+
     def __eq__(self, other):
         if isinstance(other, Morph):
             return self.s_cl == other.s_cl and self.animate == other.animate and self.gender == other.gender and self.number == other.number and \
