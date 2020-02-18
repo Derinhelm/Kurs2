@@ -37,11 +37,11 @@ class MainWords:
 
         #Здесь можно менять, в какое место будет вставлено новое главное
         # продолжаем разбор с нового разобранного
-        #self.mainWords.insert(self.pointCurMain, extMainVariant)
-        #self.curMain = self.mainWords[self.pointCurMain]
+        self.mainWords.insert(self.pointCurMain, extMainVariant)
+        self.curMain = self.mainWords[self.pointCurMain]
 
         # новое - в конец
-        self.mainWords.append(extMainVariant)
+        #self.mainWords.append(extMainVariant)
 
 
     def nextMain(self):
@@ -58,7 +58,6 @@ class MainWords:
         newMain = self.nextMain()
         if newMain != None:
             return newMain
-        self.flagEnd = True
         return None
 
     def getPattern(self):
@@ -69,7 +68,6 @@ class MainWords:
 
     def getMainVariant(self):
         return self.curMain[1]
-
 class DepWords:
     def __init__(self, dep, curMain):
         self.leftDepWords = copy.deepcopy(dep)
@@ -97,7 +95,9 @@ class DepWords:
         self.flagOtherDirection = False
         self.pointCurDep = 0
         if self.pointCurDep == len(self.depWords):
-            self.changeDirect()
+            res = self.changeDirect()
+            if res == None:
+                print("Случилось невозможное") # Тк мы попали в reset, то зависимые есть, но здесь правые и левые зависимые - []
         else:
             self.curDep = self.depWords[self.pointCurDep]
 
@@ -142,6 +142,7 @@ class DepWords:
             self.pointCurDep = 0
             self.depWords = self.leftDepWords
             if len(self.depWords) > 0:
+                self.curDep = self.depWords[self.pointCurDep]
                 return self.depWords[0]
         return None
 
@@ -162,6 +163,8 @@ class Attempts:
         res = self.main.nextPatternOrMain()
         if res != None:
             self.dep.reset()
+        else:
+            self.flagEnd = True
 
     def get(self):
         if self.flagEnd:
@@ -182,3 +185,5 @@ class Attempts:
                 res = self.main.nextPatternOrMain()
                 if res != None:
                     self.dep.reset()
+                else:
+                    self.flagEnd = True
