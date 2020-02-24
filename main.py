@@ -29,6 +29,13 @@ class GPattern:
             s += " " + c[1][1] + ";"
         return s
 
+    def __lt__(self, other): # x < y
+        if self.level < other.level:
+            return True
+        if self.level > other.level:
+            return False
+        return self.mark < other.mark
+
 def extractFirstLevel(word, curMorph, con):
     s0 = "SELECT id FROM morph_constraints WHERE " + \
          "s_cl = %s AND " + \
@@ -361,7 +368,7 @@ class ParsePoint:
                     curListNumberVariants = copy.deepcopy(listNumbersVariants)
                     curListNumberVariants = list(filter(lambda x:x[0] != i, curListNumberVariants))
                     patternsCurVariant = newWordList[i].word.gPatterns[j]
-                    att = Attempts([(i, j)], patternsCurVariant, curListNumberVariants, allPatternsListParam)
+                    att = Attempts(i, patternsCurVariant, curListNumberVariants, allPatternsListParam)
                     g = nx.DiGraph()# хранится граф (networkx)
                     newNodeName = curPointWord.word.word + "_" + str(i)
                     g.add_node(newNodeName)
@@ -541,25 +548,10 @@ class Sentence:
 
     def insertNewParsePoint(self, newPoint):
         '''insert new ParsePoint into bestParsePoints'''
-        if newPoint.countParsedWords == len(self.wordList): #все слова уже разобраны, дочерних быть не может
-            return
-        mark = newPoint.markParsePoint
-        i = 0
-        while i < len(self.bestParsePoints) and \
-                (self.bestParsePoints[i].markParsePoint > mark or \
-                                                 (self.bestParsePoints[i].markParsePoint == mark) and \
-                                                 self.bestParsePoints[i].countParsedWords >= newPoint.countParsedWords):
-            i += 1
-        if i == len(self.bestParsePoints):
-            self.bestParsePoints.append(newPoint)
-        else:
-            self.bestParsePoints = self.bestParsePoints[:i] + [newPoint] + self.bestParsePoints[i:]
+        self.bestParsePoints.insert(0, newPoint)
 
     def getBestParsePoint(self):
-        '''возвращает лучшую точку разбора, у которой еще есть дочерние'''
-        if len(self.bestParsePoints) == 0:
-            return self.rootPP
-        return self.bestParsePoints[0] # пока возвращает первую лучшую - синдром кишки, надо исправить!!
+        return self.bestParsePoints[0]
 
     # проверка связности - считаем, сколько слов в связном дереве, если = кол-ву слов, то все ок
     # на вход - res(т.е. bestParsePoint)
@@ -612,11 +604,8 @@ class Sentence:
             res = bestParsePoint.getNewParsePoint(self.maxNumberParsePoint)
             print(res)
             if (res == None):
-                if len(self.bestParsePoints) > 1:
-                    self.bestParsePoints = self.bestParsePoints[1:]
-                else:
-                    print("Не разобрано!")
-                    return bestParsePoint
+                print("Не разобрано!")
+                return bestParsePoint
             else:
                 (newPoint, pattern) = res
                 self.maxNumberParsePoint += 1
@@ -673,7 +662,7 @@ def parse(con, str1, needTrace=False):
     res = s.sintParse()
     if (needTrace):
         s.visualizate() # визуализация дерева построения
-    res.visualizate("график")
+    res.visualizate(str1)
     ans = []
     for curWord in res.parsePointWordList:
         curResult = WordResult(curWord.parsed, curWord.usedMorphAnswer, curWord.word.word, curWord.usedGp)
@@ -683,13 +672,31 @@ def parse(con, str1, needTrace=False):
 
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                        password='postgres', host='localhost')
-#str1 = "Ходят на работу люди взрослые."
-str1 = "Ходят на тяжелую работу."
+#str1 = "Идете домой с братом." Жуть
+#str1 = "Идите с братом домой." # с - почему-то существительное...
+str1 = "Русская армия готовилась к сражению."
+
+#str1 = "Ходить на работу."
+#str1 = "Бабушка снова взяла сумку."
+
+#str1 = "С родителями горжусь братом."
+
+#str1 = "Будете пить сок?"
+#str1 = "Будете сок?"
+
+#str1 = "Ходить на работу."
+
+#str1 = "Взрослые люди ходят на работу."
+
 a1 = parse(con, str1, True)
 for i in a1:
     print(i)
-#a1 = parse(con, "Идти домой с мамой .", True)
 
+#str1 = "Взрослые ходят на интересную работу."
+
+#str1 = "Быстро идите с братом домой ."
+#str1 = "Из ворот вышли две тетушки с сумками."
+#str1 = "Над заборами обвисали гроздья сирени"
 #a1 = parse(con, "Студенты замерзли на лекции.", True)
 
 #a1 = parse(con, "Заяц поздней осенью меняет серую шубу на белую.", True)
