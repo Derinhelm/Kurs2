@@ -68,7 +68,7 @@ NUMBER_PARAMETRS = 13
 class Morph: # для хранения морфологических характеристик
     names = ['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective',\
             'transitive', 'person', 'tense', 'voice', 'degree', 'static']
-    def __init__(self, cl  = 'not_imp', an = 'not_imp', \
+    def __init__(self, prob = 0, cl  = 'not_imp', an = 'not_imp', \
                  gen = 'not_imp', num = 'not_imp', \
                  cas = 'not_imp', ref = 'not_imp',\
                  perf = 'not_imp', trans = 'not_imp',\
@@ -87,6 +87,7 @@ class Morph: # для хранения морфологических харак
         self.voice = v
         self.degree = deg
         self.static = stat
+        self.probability = prob # из pymorphy2
 
     def __repr__(self):
         s = ""

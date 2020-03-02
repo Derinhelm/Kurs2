@@ -1,15 +1,12 @@
-def dbInsertWord(con, w):
+def dbInsertWord(con, w, cursor):
 # возвращает индекс, вставленного слова
-    cursor = con.cursor()
     cursor.execute('INSERT INTO word VALUES(DEFAULT,%s) RETURNING id;', (w,))
     con.commit()
     ind = cursor.fetchall()
-    cursor.close()
     return ind[0][0]
     
-def dbInsertMorph(con, m):
+def dbInsertMorph(con, m, cursor):
 # возвращает индекс, вставленного морфа
-    cursor = con.cursor()
     comand = 'INSERT INTO morph_constraints VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;'
     params = (m.s_cl, m.animate,m.gender, m.number, \
         m.case_morph, m.reflection, m.perfective, m.transitive, \
@@ -17,12 +14,10 @@ def dbInsertMorph(con, m):
     cursor.execute(comand, params)
     con.commit()
     ind = cursor.fetchall()
-    cursor.close()
     return ind[0][0]
     
-def dbFindMorph(con, m):
+def dbFindMorph(con, m, cursor):
 # здесь ответ - одно индекс !! Морфы все должны быть различны!!
-    cursor = con.cursor()
     comand = "SELECT id FROM morph_constraints WHERE " + \
         "s_cl = %s AND " + \
         "animate = %s AND " + \
@@ -44,7 +39,6 @@ def dbFindMorph(con, m):
     ans = []
     for row in cursor:
         ans.append(row[0])
-    cursor.close()
     if len(ans) == 0:
         return None # нет такого морфа
     if len(ans) > 1:
@@ -53,8 +47,7 @@ def dbFindMorph(con, m):
     else:
         return ans[0]
     
-def dbFindWord(con, w):
-    cursor = con.cursor()
+def dbFindWord(con, w, cursor):
     comand = "SELECT id FROM word WHERE " + \
         "name = %s;"
     params = (w,)
@@ -62,21 +55,20 @@ def dbFindWord(con, w):
     ans = []
     for row in cursor:
         ans.append(row[0])
-    cursor.close()
     if len(ans) == 0:
         return None # нет такого морфа
     return ans[0]
 
-def findOrInsertMorph(con, m):
-    res = dbFindMorph(con, m)
+def findOrInsertMorph(con, m, cursor):
+    res = dbFindMorph(con, m, cursor)
     if res:
         return res
-    res = dbInsertMorph(con, m)
+    res = dbInsertMorph(con, m, cursor)
     return res
 
-def findOrInsertWord(con, m):
-    res = dbFindWord(con, m)
+def findOrInsertWord(con, m, cursor):
+    res = dbFindWord(con, m, cursor)
     if res:
         return res
-    res = dbInsertWord(con, m)
+    res = dbInsertWord(con, m, cursor)
     return res

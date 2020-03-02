@@ -4,6 +4,7 @@ from Types import *
 
 def parseToMorph(text, curParse):
     curMorph = Morph()
+    curMorph.probability = curParse.score
    # print(curParse)
    # print(curParse.tag)
     if (curParse.normal_form == "себя"):
