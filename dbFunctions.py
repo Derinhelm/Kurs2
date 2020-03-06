@@ -7,10 +7,10 @@ def dbInsertWord(con, w, cursor):
     
 def dbInsertMorph(con, m, cursor):
 # возвращает индекс, вставленного морфа
-    comand = 'INSERT INTO morph_constraints VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;'
+    comand = 'INSERT INTO morph_constraints VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;'
     params = (m.s_cl, m.animate,m.gender, m.number, \
         m.case_morph, m.reflection, m.perfective, m.transitive, \
-        m.person, m.tense, m.voice, m.degree, m.static)
+        m.person, m.tense, m.voice, m.degree, m.static, m.prep_type)
     cursor.execute(comand, params)
     con.commit()
     ind = cursor.fetchall()
@@ -31,10 +31,11 @@ def dbFindMorph(con, m, cursor):
         "tense = %s AND " + \
         "voice = %s AND " + \
         "degree = %s AND " + \
-        "static = %s;"
+        "static = %s AND " \
+        "prep_type = %s;"
     params = (m.s_cl, m.animate,m.gender, m.number, \
         m.case_morph, m.reflection, m.perfective, m.transitive, \
-        m.person, m.tense, m.voice, m.degree, m.static)
+        m.person, m.tense, m.voice, m.degree, m.static, m.prep_type)
     cursor.execute(comand, params)
     ans = []
     for row in cursor:
