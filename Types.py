@@ -52,7 +52,7 @@ dictField = {'noun':'s_cl', 'adjective':'s_cl', 'shortadjective':'s_cl', \
         'nominative':'case_morph', 'genitive':'case_morph', 'dative':'case_morph', \
         'accusative':'case_morph', 'instrumental':'case_morph', 'prepositional':'case_morph',\
         'case_any':'case_morph', 'prepositional':'case_morph', 'genitive':'case_morph', \
-        'reflexive':'reflection', 'unreflexive':'reflection', 'reflexiveForm':'reflection', 'reflectionAny':'reflection', \
+        'reflexive':'reflection', 'unreflexive':'reflection', 'reflexive_form':'reflection', 'reflection_any':'reflection', \
         'perfective':'perfective', 'unperfective':'perfective', 'perfective_any':'perfective', \
         'transitive':'transitive', 'untransitive':'transitive', 'transitive_any':'transitive', \
         'first':'person', 'second':'person', 'third':'person', 'person_any':'person', \
@@ -60,7 +60,11 @@ dictField = {'noun':'s_cl', 'adjective':'s_cl', 'shortadjective':'s_cl', \
         'infinitive':'tense', 'imperative':'tense', \
         'active':'voice', 'passive':'voice', 'voice_any':'voice', \
         'true':'static', 'false':'static', \
-        'strong':'static', 'weak':'static', 'degree_any':'static'
+        'strong':'static', 'weak':'static', 'degree_any':'static',
+        'a':'prep_type', 'dap':'prep_type', 'gai':'prep_type', \
+        'ai':'prep_type', 'ap':'prep_type', 'd':'prep_type', \
+        'gd':'prep_type', 'g':'prep_type', 'gi':'prep_type', \
+        'i':'prep_type', 'p':'prep_type'
        }
 
 NUMBER_PARAMETRS = 14
@@ -290,9 +294,23 @@ prepTypeDict = {'без': 'g',
  'с точки зрения': 'g',
  'с целью': 'g'}
 
+prepTypeToCaseDict = {
+'a': ['accusative'],
+'dap': ['dative', 'accusative', 'prepositional'],
+'gai': ['genitive', 'accusative', 'instrumental'],
+'ai': ['accusative', 'instrumental'],
+'ap': ['accusative', 'prepositional'],
+'d': ['dative'],
+'gd': ['genitive', 'dative'],
+'g': ['genitive'],
+'gi': ['genitive', 'instrumental'],
+'i': ['instrumental'],
+'p': ['prepositional']
+}
 class Morph: # для хранения морфологических характеристик
     names = ['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective',\
             'transitive', 'person', 'tense', 'voice', 'degree', 'static', 'prep_type']
+
     def __init__(self, prob = 0, cl  = 'not_imp', an = 'not_imp', \
                  gen = 'not_imp', num = 'not_imp', \
                  cas = 'not_imp', ref = 'not_imp',\
@@ -329,5 +347,42 @@ class Morph: # для хранения морфологических харак
                 self.case_morph == other.case_morph and self.reflection == other.reflection and self.perfective == other.perfective and self.transitive == other.transitive and \
                 self.person == other.person and self.tense == other.tense and self.voice == other.voice and self.degree == other.degree and self.static == other.static
         return NotImplemented
-    
-    
+
+    def get_imp(self):
+        imp_list = []
+        for cur_name in self.names:
+            value = getattr(self, cur_name)
+            if value != 'not_imp':
+                imp_list.append(value)
+        return imp_list
+
+    def check_imp(self, check_list):
+        for cur_param in check_list:
+            if getattr(self, dictField[cur_param]) != cur_param:
+                return False
+        return True
+
+class GPattern:
+    def __init__(self, l, mw, dw, mark, mc, dc):
+        self.level = l
+        self.mainWord = mw
+        self.dependentWord = dw
+        self.mark = mark
+        self.mainWordConstraints = mc  # массив ограничений на морф
+        self.dependentWordConstraints = dc  # массив ограничений на морф
+
+    def __repr__(self):
+        s = str(self.level) + ":"
+        if self.level == 3:
+            s += " " + self.dependentWord
+        s += " " + str(self.mark) + " "
+        for c in self.dependentWordConstraints:
+            s += " " + c + ";"
+        return s
+
+    def __lt__(self, other): # x < y
+        if self.level < other.level:
+            return True
+        if self.level > other.level:
+            return False
+        return self.mark < other.mark
