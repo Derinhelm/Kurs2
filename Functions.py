@@ -25,7 +25,7 @@ def parseToMorph(text, curParse):
         curMorph.s_cl = 'numberthree'
     else:
         curMorph.s_cl = cl[str(curParse.tag.POS)]
-    
+
     #print(curParse.tag.POS)#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     curMorph.animate = anim[str(curParse.tag.animacy)]
     if ("Ms-f" in curParse.tag):
@@ -63,7 +63,7 @@ def parseToMorph(text, curParse):
         curMorph.tense = tense[str(curParse.tag.tense)]
     curMorph.voice = voice[str(curParse.tag.voice)]
     #curMorph.degree =  ????????????????????????????????????????????????????????????????
-    if (len(curParse.lexeme) == 1 or curMorph.s_cl == 'preposition' or curMorph.s_cl == 'gerund' or curMorph.s_cl == 'conjunction' or curMorph.s_cl == 'interjection' or curMorph.s_cl == 'adverb'): 
+    if (len(curParse.lexeme) == 1 or curMorph.s_cl == 'preposition' or curMorph.s_cl == 'gerund' or curMorph.s_cl == 'conjunction' or curMorph.s_cl == 'interjection' or curMorph.s_cl == 'adverb'):
         curMorph.static = 'true'
     if curMorph.s_cl == 'preposition':
         if text in prepTypeDict.keys():
@@ -74,7 +74,8 @@ def parseToMorph(text, curParse):
 
 def create_comand(level, where_str):
     if level == 1:
-        return "select null, null, gp.mark, " + \
+        return "select null, null, " + \
+               "create_mark_1(gp.mark, gp.main_morph, gp.dep_morph), " + \
                 "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
                  "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
         "from gpattern_1_level as gp " + \
@@ -84,7 +85,8 @@ def create_comand(level, where_str):
         "on dep.id = dep_morph " + \
         where_str + " order by mark desc"
     if level == 2:
-        return "select main_word.name, null, gp.mark, " + \
+        return "select main_word.name, null, " + \
+               "create_mark_2(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word), " + \
                 "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
                  "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
         "from gpattern_2_level as gp " + \
@@ -96,8 +98,9 @@ def create_comand(level, where_str):
         "on main_word.id = main_word " + \
         where_str + " order by mark desc"
     # level = 3
-    return "select main_word.name, dep_word.name, gp.mark, " + \
-                "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
+    return "select main_word.name, dep_word.name, " + \
+           "create_mark_3(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word, gp.dep_word), " + \
+    "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
                  "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
         "from gpattern_3_level as gp " + \
         "left join morph_constraints as main " + \
@@ -184,6 +187,8 @@ def get_patterns_pandas(cursor, level, mainMorphParams = None, depMorphParams = 
 def get_patterns(cursor, level, mainMorphParams = None, depMorphParams = None, mainWordParam = None, depWordParam = None):
     where, params = create_where(False, mainMorphParams, depMorphParams, mainWordParam, depWordParam)
     comand = create_comand(level, where)
+    print(comand)
+    print(params)
     cursor.execute(comand, params)
     res = cursor.fetchall()
     patternsList = []
