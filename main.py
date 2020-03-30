@@ -4,30 +4,28 @@ from Functions import *
 import pymorphy2
 from Attempts_module import Attempts
 
-morph = pymorphy2.MorphAnalyzer()
 import networkx as nx
 import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import write_dot, graphviz_layout
-import psycopg2
 import math
 import sys
 
-#def countWordOccurence(cursor, word):
-#    как-то написать(см динамика работы)
-
 class Word:
-    def morphParse(self):
-        p = morph.parse(self.word)
-        numberWord = self.numberInSentence
-        numberVariant = 0
-        curListNumbersVariants = []
+    def morphParse(self, morph):
+        if self.word[-1] == '.':
+            p = morph.parse(self.word[:-1])
+            abbr = True
+        else:
+            p = morph.parse(self.word)
+            abbr = False
         for curParse in p:
-            m = parseToMorph(self.word, curParse)
-            self.morph.append(m)
-            self.normalWord.append(curParse.normal_form)
-            curListNumbersVariants.append((numberWord, numberVariant))
-            numberVariant += 1
-        return curListNumbersVariants
+            if (abbr and 'Abbr' in curParse.tag) or \
+                    (not abbr and not 'Abbr' in curParse.tag):
+            # чтобы предлогу к не приписывался вариант кандидат
+                m = parseToMorph(self.word, curParse)
+                self.morph.append(m)
+                self.normalWord.append(curParse.normal_form)
+        return
 
     def getGPatterns(self, con):
         for i in range(len(self.morph)):
@@ -198,7 +196,7 @@ class ParsePoint:
         newGraph.add_edge(mainWord, depWord)
         return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber, newAttempts, newGraph)
 
-    def findFirstWord(self, fun, listNumbersVariants, allPatternsListParam):
+    def findFirstWord(self, fun, listNumbersVariants, allPatternsListParam, morphPosition, wordPosition):
         numberChildPoint = self.numberPoint + 1
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
@@ -210,24 +208,29 @@ class ParsePoint:
                     newWordList[i].parsed = True
                     newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
                     curListNumberVariants = copy.deepcopy(listNumbersVariants)
-                    curListNumberVariants = list(filter(lambda x:x[0] != i, curListNumberVariants))
                     patternsCurVariant = newWordList[i].word.gPatterns[j]
-                    att = Attempts(i, patternsCurVariant, curListNumberVariants, allPatternsListParam)
+                    att = Attempts(i, patternsCurVariant, curListNumberVariants, allPatternsListParam, morphPosition, wordPosition)
                     g = nx.DiGraph()# хранится граф (networkx)
                     newNodeName = curPointWord.word.word + "_" + str(i)
                     g.add_node(newNodeName)
                     newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint, att, g)
                     numberChildPoint += 1
                     listNewParsePoints.append(newParsePoint)
-            if listNewParsePoints:
+            if listNewParsePoints != []:
                 return (listNewParsePoints, [i])
         return None
 
     def getNewParsePoint(self, maxNumberPoint):
         '''create new ParsePoint, child for self'''
+        print("------")
+        re = 0
         while True:
+            print(re)
+            if re == 147:
+                ewewe = 0
+            re += 1
             ans = self.attempts.get()
-            print(ans)
+            #print(ans)
             if ans == None:
                 return None
             (potMain, potPattern, potDep, potDepParseVariant) = ans
@@ -238,6 +241,8 @@ class ParsePoint:
                 self.childParsePoint.append(newParsePoint)
                 self.attempts.next()
                 return (newParsePoint, potPattern)
+            print("Случилось невозможное")
+            sys.exit(1)
             self.attempts.next()
 
 
@@ -323,6 +328,8 @@ class Sentence:
         self.allPatternsList = []
         # список вида [[модели управления]], для каждого варианта разбора каждого слова храним его возможные модели управления
         # j элементе i элемента allPatternsList - список моделей управления для j варианта разбора i слова
+        self.morphPosition = {} # ключ - морф.характеристика, значение - set из пар (позиция слова, номер варианта разбора)
+        self.wordPosition = {} # ключ - нач.форма слова, значение - set из пар (позиция слова, номер варианта разбора)
 
     def __repr__(self):
         return self.inputStr
@@ -332,24 +339,51 @@ class Sentence:
         # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
         #: ; " ' началом предложения, запятой, (   ) тире вообще не учитываем(оно отделено пробелами),
         # дефис только в словах очень-очень и тп,
-        punctuation = [' ', '.', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
+        punctuation = [' ', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
         curWord = ""
         numberWord = 0
-        for i in self.inputStr:
-            if (i in punctuation):
+        for i in range(len(self.inputStr)):
+            cur_symbol = self.inputStr[i]
+            if (cur_symbol in punctuation) or \
+                    (cur_symbol == '.' and \
+                        (i == len(self.inputStr) - 1 or \
+                        not self.inputStr[i + 1] in punctuation)):
+                #(cur_symbol == '.' ... - точка, но не сокращение
                 if (len(curWord) != 0):
                     self.wordList.append(Word(curWord.lower(), numberWord))
                     numberWord += 1
                     curWord = ""
-            elif (i != '-' or (len(curWord) != 0)):  # - и непустое слово -  это дефис
-                curWord = curWord + i
+            elif (cur_symbol != '-' or (len(curWord) != 0)):  # - и непустое слово -  это дефис
+                curWord = curWord + cur_symbol
         if (len(curWord) != 0):
             self.wordList.append(Word(curWord.lower(), numberWord))
 
-    def morphParse(self):
-        for curWord in self.wordList:
-            curListNumbersVariants = curWord.morphParse()
-            self.listNumberWords += curListNumbersVariants
+    def addMorphPosition(self, cur_morph_form, position_info):
+        for cur_param in cur_morph_form.get_imp():
+            if not cur_param in self.morphPosition.keys():
+                self.morphPosition[cur_param] = set()
+            self.morphPosition[cur_param].add(position_info)
+
+    def addWordPosition(self, cur_word, position_info):
+        if not cur_word in self.wordPosition.keys():
+            self.wordPosition[cur_word] = set()
+        self.wordPosition[cur_word].add(position_info)
+
+    def morphParse(self, morph):
+        for word_position in range(len(self.wordList)):
+            cur_word = self.wordList[word_position]
+            cur_word.morphParse(morph)
+            cur_list_numbers_variants = []
+            for number_parse_variant in range(len(cur_word.morph)):
+                cur_list_numbers_variants.append((word_position, number_parse_variant))
+                cur_normal_form = cur_word.normalWord[number_parse_variant]
+                cur_morph_form = cur_word.morph[number_parse_variant]
+                # cur_word.morph и cur_word.normalWord по длине совпадают, i-ому варианту разбора соответствуе
+                # i-ая начальная форма из cur_word.normalWord и i-ые морфологические характеристики из cur_word.morph
+
+                self.addMorphPosition(cur_morph_form, (word_position, number_parse_variant))
+                self.addWordPosition(cur_normal_form, (word_position, number_parse_variant))
+            self.listNumberWords += cur_list_numbers_variants
 
     def getGPatterns(self, con):
         for curWord in self.wordList:
@@ -366,17 +400,17 @@ class Sentence:
             curParsePointWord.parsed = False
             curParsePointWord.word = word
             self.rootPP.parsePointWordList.append(curParsePointWord)
-        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb', self.listNumberWords, self.allPatternsList)
-        if verbRes:
+        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb', self.listNumberWords, self.allPatternsList, self.morphPosition, self.wordPosition)
+        if verbRes != None:
             (listNewParsePoints, firstWords) = verbRes
         else:
             # в предложении нет глагола
-            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', self.listNumberWords, self.allPatternsList)
-            if nounRes:
+            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', self.listNumberWords, self.allPatternsList, self.morphPosition, self.wordPosition)
+            if nounRes != None:
                 (listNewParsePoints, firstWords) = nounRes
             else:
-                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition', self.listNumberWords, self.allPatternsList)
-                if prepRes:
+                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition', self.listNumberWords, self.allPatternsList, self.morphPosition, self.wordPosition)
+                if prepRes != None:
                     (listNewParsePoints, firstWords) = prepRes
                 else:
                     print("В предложении нет глагола, сущ в И.п, предлога")
@@ -397,21 +431,6 @@ class Sentence:
 
     def getBestParsePoint(self):
         return self.bestParsePoints[0]
-
-    # проверка связности - считаем, сколько слов в связном дереве, если = кол-ву слов, то все ок
-    # на вход - res(т.е. bestParsePoint)
-    def countDependent(self, curParsePoint, firstWordIndex):
-        newParsePointWord = curParsePoint.parsePointWordList[firstWordIndex]
-        count = 1
-        for curModel in newParsePointWord.usedGp:
-            depWord1 = curModel.depWord
-            # print(depWord1.word)
-            count += self.countDependent(curParsePoint, depWord1.numberInSentence)
-        return count
-
-    def checkConnectivity(self, curParsePoint):  # параметр - предложение
-        return len(self.wordList) == self.countDependent(curParsePoint, self.firstParseWordsIndices[0])
-
 
     def visualizate(self):
         '''visualizate tree of parse'''
@@ -440,15 +459,15 @@ class Sentence:
 
 
     def sintParse(self):
-        if (not self.rootPP):
+        if self.rootPP == None:
             self.getRootParsePoint()
 
         while (1):
             bestParsePoint = self.getBestParsePoint()
             #bestParsePoint.visualizate(self.firstParseWordsIndices, "Лучшая точка")
             res = bestParsePoint.getNewParsePoint(self.maxNumberParsePoint)
-            print(res)
-            if (res == None):
+            #print(res)
+            if res == None:
                 print("Не разобрано!")
                 return bestParsePoint
             else:
@@ -458,11 +477,13 @@ class Sentence:
                 self.graph.add_node(newPointName)
                 self.graph.add_edge(bestParsePoint.__repr__(), newPoint.__repr__(), n = pattern.__repr__())
                 self.dictParsePoints[newPointName] = newPoint
-                self.insertNewParsePoint(newPoint)
                 #newPoint.visualizate(self.firstParseWordsIndices, "Новая точка")
                 if newPoint.checkEndParse():
                     if newPoint.checkPrep():
+                        print("------")
                         return newPoint
+                else:
+                    self.insertNewParsePoint(newPoint)
 
 def onMouseClickTree(event, dictParsePoints, pos):
     # type: (matplotlib.backend_bases.MouseEvent) -> None
@@ -499,127 +520,22 @@ class WordResult:
             return self.word + ":" + self.morfForm.__repr__()
         return "Не разобрано"
 
-def parse(con, str1, needTrace=False):
+def parse(con, morph, str1, count = 1, needTrace=False):
     s = Sentence()
     s.setString(str1)
-    s.morphParse()
+    s.morphParse(morph)
     s.getGPatterns(con)
-    res = s.sintParse()
-    if (needTrace):
-        s.visualizate() # визуализация дерева построения
-    res.visualizate(str1)
+    for i in range(count):
+        print("------------------------------------------------------", i)
+        res = s.sintParse()
+        if (needTrace):
+            s.visualizate() # визуализация дерева построения
+        res.visualizate(str1)
     ans = []
     for curWord in res.parsePointWordList:
         curResult = WordResult(curWord.parsed, curWord.usedMorphAnswer, curWord.word.word, curWord.usedGp)
         ans.append(curResult)
     return ans
 
-
-con = psycopg2.connect(dbname='gpatterns', user='postgres',
-                       password='postgres', host='localhost')
-#str1 = "Идете домой с братом." Жуть
-#str1 = "Идите с братом домой." # с - почему-то существительное...
-str1 = "Русская армия готовилась к сражению."
-
-#str1 = "Ходить на работу."
-#str1 = "Бабушка снова взяла сумку."
-
-#str1 = "С родителями горжусь братом."
-
-#str1 = "Будете пить сок?"
-#str1 = "Будете сок?"
-
-#str1 = "Ходить на работу."
-
-#str1 = "Взрослые люди ходят на работу."
-
-a1 = parse(con, str1)
-for i in a1:
-    print(i)
-
-#str1 = "Взрослые ходят на интересную работу."
-
-#str1 = "Быстро идите с братом домой ."
-#str1 = "Из ворот вышли две тетушки с сумками."
-#str1 = "Над заборами обвисали гроздья сирени"
-#a1 = parse(con, "Студенты замерзли на лекции.", True)
-
-#a1 = parse(con, "Заяц поздней осенью меняет серую шубу на белую.", True)
-
-#a1 = parse(con, str1, True)
-'''
-a1 = parse(con, "Я прочел до середины список кораблей.", True)
-a1 = parse(con, "Вязнут расписные спицы в расхлябанные колеи.", True)
-a1 = parse(con, "Ковыли с вековою тоскою пригнулись к земле.", True)
-a1 = parse(con, "К метро шли долго.", True)
-a1 = parse(con, "Студенты замерзли на лекции.", True)
-a1 = parse(con, "Ты стал очень хорошим человеком.", True)
-
-
-a1 = parse(con, "Ты будешь сок?", True)
-a1 = parse(con, "Все счастливые семьи счастливы по-своему.", True)
-a1 = parse(con, "Осень поражает нас своими непрерывными изменениями.", True)
-a1 = parse(con, "Вещи, потерянные нами,c обязательно вернутся к нам!.", True)
-
-
-a1 = parse(con, "Моя ладонь превратилась в кулак.", True)
-
-a1 = parse(con, "Счастье можно найти даже в темные времена.", True)
-
-a1 = parse(con, "Дети поздно пришли домой.", True)
-a1 = parse(con, "На штурм.", True)
-print(a1)
-'''
-'''a1 = parse(con, "Ходить на работу.")
-a1 =  parse(con, "Маленький мальчик хочет спать.",  True)
-s = Sentence()
-str1 = "Взрослые люди ходят на работу."
-s.setString(str1)
-s.morphParse()
-s.getGPatterns(con)
-res = s.sintParse()
-res.visualizate(s.firstParseWordsIndices)
-for i in range(10):
-    res1 = s.sintParse()
-    res1.visualizate(s.firstParseWordsIndices)
-a1 = parse(con, "Маленький мальчик хочет спать.")
-a1 = parse(con, "Каждый час имеет свое чудо.", True)
-a1 = parse(con, "Памятник себе воздвиг нерукотворный.", True)
-a1 = parse(con, "Рассеет серых туч войска.", True)
-#a1 = parse(con, "Сегодня будет четный день.", True)
-a1 = parse(con, "Шекспир был английским писателем.", True)
-a1 = parse(con, "Надежда умирает последней.", True)
-a1 = parse(con, "В небе танцует золото.", True)
-a1 = parse(con, "Звезды.", True)
-'''
-
-# a1 = parse(con, "Взрослые люди ходят на работу.", True)
-
-# a1 = parse(con, "Приведет за собой весну.", True) плохо
-# a1 = parse(con, "Взрослые люди ходят на работу.", True) плохо
-# a1 = parse(con, "Заяц поздней осенью меняет серую шубу на белую.", True)
-# a1 = parse(con, "Я прочел до середины список кораблей.", True)
-# a1 = parse(con, "Вязнут расписные спицы в расхлябанные колеи.", True)
-# a1 = parse(con, "Ковыли с вековою тоскою пригнулись к земле.", True)
-# a1 = parse(con, "К метро шли долго.", True)
-# a1 = parse(con, "Студенты замерзли на лекции.", True)
-# a1 = parse(con, "Ты стал очень хорошим человеком.", True)
-
-
-# a1 = parse(con, "Ты будешь сок?", True)
-# a1 = parse(con, "Все счастливые семьи счастливы по-своему.", True)
-# a1 = parse(con, "Осень поражает нас своими непрерывными изменениями.", True)
-# a1 = parse(con, "Вещи, потерянные нами,c обязательно вернутся к нам!.", True)
-
-
-# a1 = parse(con, "Моя ладонь превратилась в кулак.", True) плохо
-
-# a1 = parse(con, "Счастье можно найти даже в темные времена.", True) плохо
-
-# a1 = parse(con, "Дети поздно пришли домой.", True)  плохо
-# a1 = parse(con, "На штурм.", True)  плохо главное дб НА
-
-#a1 = parse(con, "Принесет с собой.", True)
-#a1 = parse(con, "Приведет с собой.", True)
 
 # print(a1)

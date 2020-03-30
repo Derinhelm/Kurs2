@@ -43,7 +43,7 @@ voice = {'actv':'active', 'pssv': 'passive', 'None':'voice_any'}
 dictField = {'noun':'s_cl', 'adjective':'s_cl', 'shortadjective':'s_cl', \
         'comparative':'s_cl', 'verb':'s_cl', 'verb':'s_cl', 'participle':'s_cl',\
         'shortparticiple':'s_cl', 'gerund':'s_cl', 'number':'s_cl', \
-        'adverb':'s_cl', 'pronoun':'s_cl', 'predicative':'s_cl', \
+        'adverb':'s_cl', 'pronoun':'s_cl', 'personalpronoun':'s_cl', 'reflexivepronoun':'s_cl', 'predicative':'s_cl', \
         'preposition':'s_cl', 'conjunction':'s_cl', 'particle':'s_cl', \
         'interjection':'s_cl', 's_cl_any':'s_cl', \
         'animate':'animate', 'unanimate':'animate', 'animate_any':'animate', \
@@ -386,3 +386,9 @@ class GPattern:
         if self.level > other.level:
             return False
         return self.mark < other.mark
+
+    def get_dep_morph_constraints(self):
+        return self.dependentWordConstraints
+
+    def get_dep_word(self):
+        return self.dependentWord
