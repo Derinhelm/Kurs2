@@ -10,50 +10,56 @@ from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 import math
 import sys
 
+class WordForm:
+    def __init__(self, con, morph, normal_form):
+        self.normal_form = normal_form
+        self.morph = morph
+        self.g_patterns = [] #список из Gpattern, в которых данная словоформа мб главной
+        self.create_patterns(con)
+
+    def __repr__(self):
+        return self.normal_form + " " + self.morph.__repr__()
+
+    def create_patterns(self, con):
+        cursor = con.cursor()
+        morph_constr = self.morph.get_imp()
+        cur_first = get_patterns(cursor, 1, mainMorphParams = morph_constr)
+        cur_sec = get_patterns(cursor, 2, mainMorphParams = morph_constr, mainWordParam = self.normal_form)
+        cur_third = get_patterns(cursor, 3, mainMorphParams = morph_constr, mainWordParam = self.normal_form)
+        cursor.close()
+        self.g_patterns += cur_third
+        self.g_patterns += cur_sec
+        self.g_patterns += cur_first
+        return
+    def get_patterns(self):
+        return self.g_patterns
+
 class Word:
-    def morphParse(self, morph):
-        if self.word[-1] == '.':
-            p = morph.parse(self.word[:-1])
+    def __init__(self, con, morph, word_text, number=-1):
+        self.word_text = word_text
+        self.forms = []
+        self.numberInSentence = number
+        self.morphParse(con, morph)
+# toDo numberInSentence убрать
+
+    def morphParse(self, con, morph):
+        if self.word_text[-1] == '.':
+            p = morph.parse(self.word_text[:-1])
             abbr = True
         else:
-            p = morph.parse(self.word)
+            p = morph.parse(self.word_text)
             abbr = False
         for curParse in p:
             if (abbr and 'Abbr' in curParse.tag) or \
                     (not abbr and not 'Abbr' in curParse.tag):
-            # чтобы предлогу к не приписывался вариант кандидат
-                m = parseToMorph(self.word, curParse)
-                self.morph.append(m)
-                self.normalWord.append(curParse.normal_form)
+            # чтобы предлогу "к" не приписывался вариант кандидат
+                morph = parseToMorph(self.word_text, curParse)
+                cur_form = WordForm(con, morph, curParse.normal_form)
+                self.forms.append(cur_form)
         return
 
-    def getGPatterns(self, con):
-        for i in range(len(self.morph)):
-            curMorph = self.morph[i]
-            curNormal = self.normalWord[i]
-            curPatterns = []
-            cursor = con.cursor()
-            morph_constr = curMorph.get_imp()
-            curFirst = get_patterns(cursor, 1, mainMorphParams = morph_constr)
-            curSec = get_patterns(cursor, 2, mainMorphParams = morph_constr, mainWordParam = curNormal)
-            curThird = get_patterns(cursor, 3, mainMorphParams = morph_constr, mainWordParam = curNormal)
-            cursor.close()
-            curPatterns += curThird
-            curPatterns += curSec
-            curPatterns += curFirst
-            self.gPatterns.append(curPatterns)
-        return self.gPatterns
-
-    def __init__(self, name="", number=-1):
-        self.word = name  # у Одинцева Word
-        self.normalWord = []  # список начальных форм слов, соответствует morph(вместе заполняются)
-        self.morph = []  # список объектов типа Morph
-
-        # список морфологических характеристик для всех вариантов морф. анализа
-        self.gPatterns = []  # список из списоков из Gpattern, i элемент - для i morph
-        # с помощью морф.анализатора заполняем morph, с помощью базы - GPatterns
-        self.numberInSentence = number
-
+    def get_all_form_patterns(self):
+        return [form.g_patterns for form in self.forms]
 
 class Gp:
     def __init__(self, mod, dw):
@@ -62,10 +68,10 @@ class Gp:
 
 
 class ParsePointWord:
-    def __init__(self):
-        self.word = Word()
+    def __init__(self, word):
+        self.word = word
         self.parsed = False
-        self.usedMorphAnswer = Morph()
+        self.usedMorphAnswer = None# типа WordForm
         self.usedGp = []  # типа Gp
 
 
@@ -123,16 +129,6 @@ class ParsePoint:
                 return False
         return True
 
-    def checkWord(self, depWord, parseVariant,
-                  gPattern):  # на вход - потенциальное зависимое слово(или потенциальный предлог), модель управления
-        #  Удовлетворяет ли требованиям данный вариант разбора данного слова
-        constr = gPattern.dependentWordConstraints
-        morphForm = depWord.morph[parseVariant]
-        normal = depWord.normalWord[parseVariant]
-        if gPattern.level != 3 or (gPattern.level == 3 and gPattern.dependentWord == normal):
-            return morphForm.check_imp(constr)
-        return False
-
     def rightMove(self, mainPPWord, gPatternToApply):
 
         for numberDep in range(mainPPWord + 1, len(self.parsePointWordList), 1):
@@ -178,11 +174,11 @@ class ParsePoint:
 
     def apply(self, mainPPWord, dependingPPWord, usedMorphAnswer, gPatternToApply, maxNumberPoint):
         '''create and return new child ParsePoint'''
-        newWordList = copy.deepcopy(self.parsePointWordList)
-        newWordList[dependingPPWord].parsed = True
-        newWordList[dependingPPWord].usedMorphAnswer = usedMorphAnswer
+        new_word_list = copy.deepcopy(self.parsePointWordList)
+        new_word_list[dependingPPWord].parsed = True
+        new_word_list[dependingPPWord].usedMorphAnswer = usedMorphAnswer
         newGp = Gp(gPatternToApply, self.parsePointWordList[dependingPPWord].word)
-        newWordList[mainPPWord].usedGp.append(newGp)
+        new_word_list[mainPPWord].usedGp.append(newGp)
         newMark = self.markParsePoint + math.log(gPatternToApply.mark)
         newParsedList = copy.deepcopy(self.parsed)
         newParsedList.append((mainPPWord, dependingPPWord))
@@ -190,60 +186,61 @@ class ParsePoint:
         newAttempts = copy.deepcopy(self.attempts)
         newAttempts.apply()
         newGraph = copy.deepcopy(self.graph)
-        depWord = self.parsePointWordList[dependingPPWord].word.word + "_" + str(dependingPPWord)
-        mainWord = self.parsePointWordList[mainPPWord].word.word + "_" + str(mainPPWord)
+        depWord = self.parsePointWordList[dependingPPWord].word.word_text + "_" + str(dependingPPWord)
+        mainWord = self.parsePointWordList[mainPPWord].word.word_text + "_" + str(mainPPWord)
         newGraph.add_node(depWord)
         newGraph.add_edge(mainWord, depWord)
-        return ParsePoint(newWordList, [], newMark, self.countParsedWords + 1, newParsedList, newNumber, newAttempts, newGraph)
+        return ParsePoint(new_word_list, [], newMark, self.countParsedWords + 1, newParsedList, newNumber, newAttempts, newGraph)
 
-    def findFirstWord(self, fun, listNumbersVariants, allPatternsListParam, morphPosition, wordPosition):
+    def find_first_word(self, fun, listNumbersVariants, allPatternsListParam, morphPosition, wordPosition):
         numberChildPoint = self.numberPoint + 1
         for i in range(len(self.parsePointWordList)):
             curPointWord = self.parsePointWordList[i]
             listNewParsePoints = []
-            for j in range(len(curPointWord.word.morph)):
-                curMorph = curPointWord.word.morph[j]
+            for j in range(len(curPointWord.word.forms)):
+                curMorph = curPointWord.word.forms[j].morph
                 if fun(curMorph):
-                    newWordList = copy.deepcopy(self.parsePointWordList)
-                    newWordList[i].parsed = True
-                    newWordList[i].usedMorphAnswer = copy.deepcopy(curMorph)
+                    new_word_list = copy.deepcopy(self.parsePointWordList)
+                    new_word_list[i].parsed = True
+                    new_word_list[i].usedMorphAnswer = copy.deepcopy(curPointWord.word.forms[j])
                     curListNumberVariants = copy.deepcopy(listNumbersVariants)
-                    patternsCurVariant = newWordList[i].word.gPatterns[j]
+                    patternsCurVariant = new_word_list[i].word.forms[j].g_patterns
                     att = Attempts(i, patternsCurVariant, curListNumberVariants, allPatternsListParam, morphPosition, wordPosition)
                     g = nx.DiGraph()# хранится граф (networkx)
-                    newNodeName = curPointWord.word.word + "_" + str(i)
+                    newNodeName = curPointWord.word.word_text + "_" + str(i)
                     g.add_node(newNodeName)
-                    newParsePoint = ParsePoint(newWordList, [], 0, 1, [], numberChildPoint, att, g)
+                    newParsePoint = ParsePoint(new_word_list, [], 0, 1, [], numberChildPoint, att, g)
                     numberChildPoint += 1
                     listNewParsePoints.append(newParsePoint)
             if listNewParsePoints != []:
                 return (listNewParsePoints, [i])
         return None
 
+    def checkWord(self, depWord, parseVariant,
+                  gPattern):  # на вход - потенциальное зависимое слово(или потенциальный предлог), модель управления
+        #  Удовлетворяет ли требованиям данный вариант разбора данного слова
+        constr = gPattern.dependentWordConstraints
+        morphForm = depWord.forms[parseVariant].morph
+        normal = depWord.forms[parseVariant].normal_form
+        if gPattern.level != 3 or (gPattern.level == 3 and gPattern.dependentWord == normal):
+            return morphForm.check_imp(constr)
+        return False
+
     def getNewParsePoint(self, maxNumberPoint):
         '''create new ParsePoint, child for self'''
         print("------")
-        re = 0
-        while True:
-            print(re)
-            if re == 147:
-                ewewe = 0
-            re += 1
-            ans = self.attempts.get()
-            #print(ans)
-            if ans == None:
-                return None
-            (potMain, potPattern, potDep, potDepParseVariant) = ans
-            depWord = self.parsePointWordList[potDep].word
-            if self.checkWord(depWord, potDepParseVariant, potPattern):
-                usedDepMorph = depWord.morph[potDepParseVariant]
-                newParsePoint = self.apply(potMain, potDep, usedDepMorph, potPattern, maxNumberPoint)
-                self.childParsePoint.append(newParsePoint)
-                self.attempts.next()
-                return (newParsePoint, potPattern)
-            print("Случилось невозможное")
-            sys.exit(1)
-            self.attempts.next()
+        att_res = self.attempts.get()
+        #print(ans)
+        if att_res == None:
+            return None
+        (potMain, potPattern, potDep, potDepParseVariant) = att_res
+        depWord = self.parsePointWordList[potDep].word
+        usedDepMorph = depWord.forms[potDepParseVariant]
+        newParsePoint = self.apply(potMain, potDep, usedDepMorph, potPattern, maxNumberPoint)
+        self.childParsePoint.append(newParsePoint)
+        self.attempts.next()
+        return (newParsePoint, potPattern)
+
 
 
     def checkEndParse(self):
@@ -257,7 +254,7 @@ class ParsePoint:
     def checkPrep(self):
         for i in range(len(self.parsePointWordList)):
             curMain = self.parsePointWordList[i]
-            if curMain.usedMorphAnswer.s_cl == 'preposition':
+            if curMain.usedMorphAnswer.morph.s_cl == 'preposition':
                 if not curMain.usedGp: # у предлога нет зависимого
                     return False
                 if len(curMain.usedGp) > 1: # у предлога больше одного зависимого
@@ -315,13 +312,12 @@ def onMouseClickParsePoint(event, parsePoint, pos):
 
 
 class Sentence:
-    def __init__(self):
+    def __init__(self, con, morph, str1):
         self.inputStr = ""
         self.wordList = []
         self.rootPP = None  # заполняется потом, с помощью getRootParsePoint
         self.firstParseWordsIndices = []  # слова, первые для разбора, в простых предложениях
         self.bestParsePoints = [] # хранится список точек разбора, упорядоченных по убыванию оценки
-        self.listNumberWords = [] # хранится список элементов вида [(номер слова, номер варианта его разбора )]
         self.graph = nx.DiGraph()# хранится граф (networkx)
         self.maxNumberParsePoint = 0
         self.dictParsePoints = {} # словарь соответствия названия точки разбора и точки разбора
@@ -331,10 +327,14 @@ class Sentence:
         self.morphPosition = {} # ключ - морф.характеристика, значение - set из пар (позиция слова, номер варианта разбора)
         self.wordPosition = {} # ключ - нач.форма слова, значение - set из пар (позиция слова, номер варианта разбора)
 
+        self.setString(con, morph, str1)
+        self.create_dicts()
+        self.create_all_patterns_list()
+
     def __repr__(self):
         return self.inputStr
 
-    def setString(self, inputStr1):
+    def setString(self, con, morph, inputStr1):
         self.inputStr = inputStr1
         # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
         #: ; " ' началом предложения, запятой, (   ) тире вообще не учитываем(оно отделено пробелами),
@@ -350,66 +350,66 @@ class Sentence:
                         not self.inputStr[i + 1] in punctuation)):
                 #(cur_symbol == '.' ... - точка, но не сокращение
                 if (len(curWord) != 0):
-                    self.wordList.append(Word(curWord.lower(), numberWord))
+                    self.wordList.append(Word(con, morph, curWord.lower(), numberWord))
                     numberWord += 1
                     curWord = ""
             elif (cur_symbol != '-' or (len(curWord) != 0)):  # - и непустое слово -  это дефис
                 curWord = curWord + cur_symbol
         if (len(curWord) != 0):
-            self.wordList.append(Word(curWord.lower(), numberWord))
+            self.wordList.append(Word(con, morph, curWord.lower(), numberWord))
 
-    def addMorphPosition(self, cur_morph_form, position_info):
+    def add_morph_position(self, cur_morph_form, position_info):
         for cur_param in cur_morph_form.get_imp():
             if not cur_param in self.morphPosition.keys():
                 self.morphPosition[cur_param] = set()
             self.morphPosition[cur_param].add(position_info)
 
-    def addWordPosition(self, cur_word, position_info):
+    def add_word_position(self, cur_word, position_info):
         if not cur_word in self.wordPosition.keys():
             self.wordPosition[cur_word] = set()
         self.wordPosition[cur_word].add(position_info)
 
-    def morphParse(self, morph):
+    def create_dicts(self):
         for word_position in range(len(self.wordList)):
-            cur_word = self.wordList[word_position]
-            cur_word.morphParse(morph)
-            cur_list_numbers_variants = []
-            for number_parse_variant in range(len(cur_word.morph)):
-                cur_list_numbers_variants.append((word_position, number_parse_variant))
-                cur_normal_form = cur_word.normalWord[number_parse_variant]
-                cur_morph_form = cur_word.morph[number_parse_variant]
-                # cur_word.morph и cur_word.normalWord по длине совпадают, i-ому варианту разбора соответствуе
-                # i-ая начальная форма из cur_word.normalWord и i-ые морфологические характеристики из cur_word.morph
+            word = self.wordList[word_position]
+            for form_position in range(len(word.forms)):
+                form = word.forms[form_position]
+                self.add_morph_position(form.morph, (word_position, form_position))
+                self.add_word_position(form.normal_form, (word_position, form_position))
 
-                self.addMorphPosition(cur_morph_form, (word_position, number_parse_variant))
-                self.addWordPosition(cur_normal_form, (word_position, number_parse_variant))
-            self.listNumberWords += cur_list_numbers_variants
+    def create_all_patterns_list(self):
+        self.allPatternsList = [word.get_all_form_patterns() for word in self.wordList]
 
     def getGPatterns(self, con):
         for curWord in self.wordList:
             listPatternsForVariants = curWord.getGPatterns(con)
             self.allPatternsList.append(listPatternsForVariants)
 
+    def create_all_word_variants_list(self):
+        all_word_variants_list = []
+        for i in range(len(self.wordList)):
+            all_word_variants_list += [(i, j) for j in range(len(self.wordList[i].forms))]
+        return all_word_variants_list
+
     def getRootParsePoint(self):
         self.rootPP = ParsePoint([], [], 0.0, 0, [], 0, None, None)
         rootName = self.rootPP.__repr__()
         self.graph.add_node(rootName)
         self.dictParsePoints[rootName] = self.rootPP
+        all_word_variants_list = self.create_all_word_variants_list()
         for word in self.wordList:
-            curParsePointWord = ParsePointWord()
-            curParsePointWord.parsed = False
-            curParsePointWord.word = word
+            curParsePointWord = ParsePointWord(word)
             self.rootPP.parsePointWordList.append(curParsePointWord)
-        verbRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'verb', self.listNumberWords, self.allPatternsList, self.morphPosition, self.wordPosition)
+        verbRes = self.rootPP.find_first_word(lambda m: m.s_cl == 'verb', all_word_variants_list, self.allPatternsList, self.morphPosition, self.wordPosition)
         if verbRes != None:
             (listNewParsePoints, firstWords) = verbRes
         else:
             # в предложении нет глагола
-            nounRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', self.listNumberWords, self.allPatternsList, self.morphPosition, self.wordPosition)
+            nounRes = self.rootPP.find_first_word(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', all_word_variants_list, self.allPatternsList, self.morphPosition, self.wordPosition)
             if nounRes != None:
                 (listNewParsePoints, firstWords) = nounRes
             else:
-                prepRes = self.rootPP.findFirstWord(lambda m: m.s_cl == 'preposition', self.listNumberWords, self.allPatternsList, self.morphPosition, self.wordPosition)
+                prepRes = self.rootPP.find_first_word(lambda m: m.s_cl == 'preposition', all_word_variants_list, self.allPatternsList, self.morphPosition, self.wordPosition)
                 if prepRes != None:
                     (listNewParsePoints, firstWords) = prepRes
                 else:
@@ -521,10 +521,7 @@ class WordResult:
         return "Не разобрано"
 
 def parse(con, morph, str1, count = 1, needTrace=False):
-    s = Sentence()
-    s.setString(str1)
-    s.morphParse(morph)
-    s.getGPatterns(con)
+    s = Sentence(con, morph, str1)
     for i in range(count):
         print("------------------------------------------------------", i)
         res = s.sintParse()
@@ -533,9 +530,14 @@ def parse(con, morph, str1, count = 1, needTrace=False):
         res.visualizate(str1)
     ans = []
     for curWord in res.parsePointWordList:
-        curResult = WordResult(curWord.parsed, curWord.usedMorphAnswer, curWord.word.word, curWord.usedGp)
+        curResult = WordResult(curWord.parsed, curWord.usedMorphAnswer, curWord.word.word_text, curWord.usedGp)
         ans.append(curResult)
     return ans
 
+def easy_parse(s, count = 1):
+    con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                           password='postgres', host='localhost')
+    morph = pymorphy2.MorphAnalyzer()
+    parse(con, morph, s, count, True)
 
 # print(a1)
