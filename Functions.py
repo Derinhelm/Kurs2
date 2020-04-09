@@ -2,80 +2,10 @@ from Types import *
 import psycopg2
 import pandas as pd
 
-def parseToMorph(text, curParse):
-    curMorph = Morph()
-    curMorph.probability = curParse.score
-   # print(curParse)
-   # print(curParse.tag)
-    if curParse.normal_form == "себя":
-        curMorph.s_cl = 'reflexivepronoun'
-    elif (curParse.normal_form in ['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они']):
-        curMorph.s_cl = 'personalpronoun'
-    elif 'Impe' in curParse.tag:
-        curMorph.s_cl = 'unpersonalverb'
-    elif 'Mult' in curParse.tag:
-        curMorph.s_cl = 'frequentativeverb'
-    elif 'Anum' in curParse.tag:
-        curMorph.s_cl = 'numberordinal' # проверить!!!!
-    elif curParse.normal_form == "один":
-        curMorph.s_cl = 'numberone'
-    elif curParse.normal_form in ['два', 'оба', 'полтора']:
-        curMorph.s_cl = 'numbertwo'
-    elif curParse.normal_form in ['три', 'четыре', 'сколько', 'несколько', 'столько', 'много', 'немного'] or 'Coll' in curParse.tag:
-        curMorph.s_cl = 'numberthree'
-    else:
-        curMorph.s_cl = cl[str(curParse.tag.POS)]
-
-    #print(curParse.tag.POS)#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    curMorph.animate = anim[str(curParse.tag.animacy)]
-    if "Ms-f" in curParse.tag:
-        curMorph.gender = 'malefemale'
-    else:
-        curMorph.gender = gend[str(curParse.tag.gender)]
-    curMorph.number = numb[str(curParse.tag.number)]
-    if str(curParse.tag.case) in cas:
-        curMorph.case_morph = cas[str(curParse.tag.case)]
-    else:
-        print("wrong case", curParse.tag.case)
-        return None
-    #if 'Refl' in curMorph.tag:
-    #    curMorph.Reflection = Ereflection.reflexive
-    #как сделать reflexiveForm ??
-    curCl = curParse.tag.POS
-    if curCl in ('VERB', 'INFN', 'PRTF', 'PRTS', 'GRND', 'PRED'): #PRED -кат.сост. мб убрать
-        if text[-2:] == "ся":
-            if curCl == 'VERB' or curCl == 'INFN':
-                curMorph.reflection = 'reflexive'
-            else:
-                curMorph.reflection = 'reflexive_form'
-        else:
-            curMorph.reflection = 'unreflexive'
-    else:
-        curMorph.reflection = 'reflection_any'
-    curMorph.perfective = perf[str(curParse.tag.aspect)]
-    curMorph.transitive = trans[str(curParse.tag.transitivity)]
-    curMorph.person = pers[str(curParse.tag.person)]
-    if curCl == 'INFN':
-        curMorph.tense = 'infinitive'
-    elif curParse.tag.mood == 'impr':
-        curMorph.tense = 'imperative'
-    else:
-        curMorph.tense = tense[str(curParse.tag.tense)]
-    curMorph.voice = voice[str(curParse.tag.voice)]
-    #curMorph.degree =  ????????????????????????????????????????????????????????????????
-    if len(curParse.lexeme) == 1 or curMorph.s_cl == 'preposition' or curMorph.s_cl == 'gerund' or curMorph.s_cl == 'conjunction' or curMorph.s_cl == 'interjection' or curMorph.s_cl == 'adverb':
-        curMorph.static = 'true'
-    if curMorph.s_cl == 'preposition':
-        if text in prepTypeDict.keys():
-            curMorph.prep_type = prepTypeDict[text]
-        else:
-            print(text)
-    return curMorph
-
 def create_comand(level, where_str):
     if level == 1:
         return "select null, null, " + \
-               "create_mark_1(gp.mark, gp.main_morph, gp.dep_morph), " + \
+               "create_mark_1(gp.mark, gp.main_morph, gp.dep_morph) as mark, " + \
                 "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
                  "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
         "from gpattern_1_level as gp " + \
@@ -86,7 +16,7 @@ def create_comand(level, where_str):
         where_str + " order by mark desc"
     if level == 2:
         return "select main_word.name, null, " + \
-               "create_mark_2(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word), " + \
+               "create_mark_2(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word) as mark, " + \
                 "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
                  "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
         "from gpattern_2_level as gp " + \
@@ -99,7 +29,7 @@ def create_comand(level, where_str):
         where_str + " order by mark desc"
     # level = 3
     return "select main_word.name, dep_word.name, " + \
-           "create_mark_3(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word, gp.dep_word), " + \
+           "create_mark_3(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word, gp.dep_word) as mark, " + \
     "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
                  "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
         "from gpattern_3_level as gp " + \
