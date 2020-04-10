@@ -30,68 +30,67 @@ def parseCorporaTag(tagCorpora):
     # 2. set важных параметров
     checkFuns = []
     impFeatures = set()
-    for curParam in tagCorpora:
-        # пока нет ниже 'comparative', 'predicative',
-        if curParam == 'V':
-            checkFuns.append(lambda m: m.s_cl in ['verb', 'participle', 'shortparticiple', 'gerund'])
+    for cur_param in tagCorpora:
+        if cur_param == 'V':
+            checkFuns.append(lambda m: m.s_cl in ['verb', 'participle', 'shortparticiple', 'gerund', 'frequentativeverb', 'unpersonalverb', 'predicative'])
             impFeatures.add('transitive')
-        elif curParam == 'S':
-            checkFuns.append(lambda m: m.s_cl in ['noun', 'pronoun'])
-        elif curParam == 'A':
-            checkFuns.append(lambda m: m.s_cl in ['adjective', 'shortadjective', 'number', 'pronoun'])
+        elif cur_param == 'S':
+            checkFuns.append(lambda m: m.s_cl in ['noun', 'pronoun', 'personalpronoun', 'name', 'pronounadjective', 'reflexivepronoun', 'comparative', 'predicative'])
+        elif cur_param == 'A':
+            checkFuns.append(lambda m: m.s_cl in ['adjective', 'shortadjective', 'number', 'pronoun', 'reflexivepronoun', 'pronounadjective', 'possesiveadjective', 'comparative', 'predicative'])
         # прилагательное: новый, мой, второй
-        elif curParam == 'ADV':
-            checkFuns.append(lambda m: m.s_cl in ['adverb', 'pronoun'])
+        elif cur_param == 'ADV':
+            checkFuns.append(lambda m: m.s_cl in ['adverb', 'pronoun', 'comparative', 'predicative'])
         # наречие: плохо, отчасти
-        elif curParam == 'NUM':
+        elif cur_param == 'NUM':
             # числительное: пять, 2,
-            checkFuns.append(lambda m: m.s_cl in ['number'])
-        elif curParam == 'PR':
+            checkFuns.append(lambda m: m.s_cl in ['number', 'numberordinal', 'numberone', 'numbertwo', 'numberthree', 'numberbiform'])
+        elif cur_param == 'PR':
             checkFuns.append(lambda m: m.s_cl in ['preposition'])
             impFeatures.add('prep_type')
         # предлог: в, между, вопреки
-        elif curParam == 'CONJ':
+        elif cur_param == 'CONJ':
             checkFuns.append(lambda m: m.s_cl in ['conjunction', 'pronoun'])
         # союз: и, что, как
-        elif curParam == 'PART':
+        elif cur_param == 'PART':
             checkFuns.append(lambda m: m.s_cl in ['particle'])
         # частица: бы, ли, только
-        elif curParam == 'INTJ':
+        elif cur_param == 'INTJ':
             checkFuns.append(lambda m: m.s_cl in ['interjection'])
         # междометие: ого, увы, эх
-        elif curParam == 'ИМ':
+        elif cur_param == 'ИМ':
             checkFuns.append(lambda m: m.case_morph == 'nominative')
-        elif curParam == 'РОД':
+        elif cur_param == 'РОД':
             checkFuns.append(lambda m: m.case_morph == 'genitive')
-        elif curParam == 'ДАТ':
+        elif cur_param == 'ДАТ':
             checkFuns.append(lambda m: m.case_morph == 'dative')
-        elif curParam == 'ВИН':
+        elif cur_param == 'ВИН':
             checkFuns.append(lambda m: m.case_morph == 'accusative')
-        elif curParam == 'ТВОР':
+        elif cur_param == 'ТВОР':
             checkFuns.append(lambda m: m.case_morph == 'instrumental')
-        elif curParam == 'ПР':
+        elif cur_param == 'ПР':
             checkFuns.append(lambda m: m.case_morph == 'prepositional')
-        elif curParam == 'ПАРТ':
+        elif cur_param == 'ПАРТ':
             checkFuns.append(lambda m: m.case_morph == 'genitive')
-        elif curParam == 'МЕСТН':
+        elif cur_param == 'МЕСТН':
             checkFuns.append(lambda m: m.case_morph == 'prepositional')
-        elif curParam == 'ЗВ':
+        elif cur_param == 'ЗВ':
             return ([lambda m: False], None)  # с звательным падежом пока не работаем
 
-        elif curParam == 'СРАВ':
+        elif cur_param == 'СРАВ':
             checkFuns.append(lambda m: m.s_cl == 'comparative')
-        elif curParam == 'КР':
+        elif cur_param == 'КР':
             checkFuns.append(lambda m: m.s_cl == 'shortadjective' or m.s_cl == 'shortparticiple')
-        elif curParam == 'NID':
+        elif cur_param == 'NID':
             return ([lambda m: False], None)
 
-        elif curParam == 'ЕД':
+        elif cur_param == 'ЕД':
             checkFuns.append(lambda m: m.number == 'single')
-        elif curParam == 'МН':
+        elif cur_param == 'МН':
             checkFuns.append(lambda m: m.number == 'plural')
 
-        if not curParam in ['СЛ', 'COM', 'СМЯГ', 'НЕСТАНД', 'МЕТА', 'НЕПРАВ']:
-            impFeatures.add(сorporaToImpMorph[curParam])
+        if not cur_param in ['СЛ', 'COM', 'СМЯГ', 'НЕСТАНД', 'МЕТА', 'НЕПРАВ']:
+            impFeatures.add(сorporaToImpMorph[cur_param])
     return (checkFuns, impFeatures)
 
 
@@ -123,14 +122,14 @@ def getParseByPymorphy(curWord, curTagCorpora, curNormalForm, arrParse):
     # print(curWord, curTagCorpora, curNormalForm, arrParse)
     notImpFeat = set(copy.copy(Morph.names)) - impFeatures
     goodParsePymorphy = []
-    for curParse in arrParse:
-        if eqNormForm(curParse.normal_form, curNormalForm, curParse) or \
+    for cur_parse in arrParse:
+        if eqNormForm(cur_parse.normal_form, curNormalForm, cur_parse) or \
                 'НЕСТАНД' in curTagCorpora or 'НЕПРАВ' in curTagCorpora or \
-                (('VERB' in curParse.tag or 'INFN' in curParse.tag or 'GRND' in curParse.tag or \
-                  'PRTF' in curParse.tag or 'PRTS' in curParse.tag) and curTagCorpora[0] == 'V'):
+                (('VERB' in cur_parse.tag or 'INFN' in cur_parse.tag or 'GRND' in cur_parse.tag or \
+                  'PRTF' in cur_parse.tag or 'PRTS' in cur_parse.tag) and curTagCorpora[0] == 'V'):
             # для глаголов пока не требуем совпадения начальных форм
-            m = parseToMorph(curWord, curParse)
-            nw = curParse.normal_form  # начальная форма слова
+            m = Morph(cur_parse, curWord)
+            nw = cur_parse.normal_form  # начальная форма слова
             if m != None:
                 flagTrueParse = True
                 for curCheckFun in checkFuns:
@@ -143,7 +142,7 @@ def getParseByPymorphy(curWord, curTagCorpora, curNormalForm, arrParse):
                     if not m in goodParsePymorphy:
                         goodParsePymorphy += [(m, nw)]
     # else:
-    # f.write(curParse.normal_form)
+    # f.write(cur_parse.normal_form)
     # f.write("\n")
     # f.write(curNormalForm)
     # f.write("\n")
@@ -176,12 +175,12 @@ def getNumberFromDB(variantsList, con, cursor):
 
 
 def insertPattern3(con, cursor, mainMorphNumber, depMorphNumber, \
-                   mainWordNumber, depWordNumber, mark):
+                   main_wordNumber, dep_wordNumber, mark):
     comand = "SELECT id FROM gpattern_3_level WHERE " + \
              "main_morph = %s AND dep_morph = %s AND " + \
              "main_word = %s AND dep_word = %s;"
     params = (mainMorphNumber, depMorphNumber, \
-              mainWordNumber, depWordNumber)
+              main_wordNumber, dep_wordNumber)
     cursor.execute(comand, params)
     ind = cursor.fetchall()
     if len(ind) == 0:
@@ -197,12 +196,12 @@ def insertPattern3(con, cursor, mainMorphNumber, depMorphNumber, \
 
 
 def insertPattern2(con, cursor, mainMorphNumber, depMorphNumber, \
-                   mainWordNumber, mark):
+                   main_wordNumber, mark):
     comand = "SELECT id FROM gpattern_2_level WHERE " + \
              "main_morph = %s AND dep_morph = %s AND " + \
              "main_word = %s;"
     params = (mainMorphNumber, depMorphNumber, \
-              mainWordNumber)
+              main_wordNumber)
     cursor.execute(comand, params)
     ind = cursor.fetchall()
     if len(ind) == 0:
@@ -247,21 +246,21 @@ def insertAllPairs(con, cursor, mainInserts, depInserts):
     # массив номеров слова в таблице word(мб несколько в дальнейшем)
     # пока массив из одного элемента
     denominator = 0
-    for curMain in mainInserts:
-        for curDep in depInserts:
-            denominator += curMain[2] * curDep[2]
-    for curMain in mainInserts:
-        for curDep in depInserts:
-            mainMorphNumber = curMain[0]
-            mainNormalFormNumber = curMain[1]
-            depMorphNumber = curDep[0]
-            depNormalFormNumber = curDep[1]
-            mark = curMain[2] * curDep[2] / denominator
+    for cur_main in mainInserts:
+        for cur_dep in depInserts:
+            denominator += cur_main[2] * cur_dep[2]
+    for cur_main in mainInserts:
+        for cur_dep in depInserts:
+            mainMorphNumber = cur_main[0]
+            mainNormalFormNumber = cur_main[1]
+            depMorphNumber = cur_dep[0]
+            depNormalFormNumber = cur_dep[1]
+            mark = cur_main[2] * cur_dep[2] / denominator
             insertPattern(con, cursor, mainMorphNumber, mainNormalFormNumber, \
                           depMorphNumber, depNormalFormNumber, mark)
 
 
-def checkWord(word):
+def check_word(word):
     if word == None:
         return False
     if word.count(" ") != 0:  # слова с пробелами пока не учитываем
@@ -272,14 +271,14 @@ def checkWord(word):
 
 
 def insertPair(curPair, morph, con, cursor):
-    (mainWord, mainNormalForm, mainFeat, depWord,
+    (main_word, mainNormalForm, mainFeat, dep_word,
      depNormalForm, depFeat, _, _) = curPair
-    if (not checkWord(mainWord)) or (not checkWord(depWord)):
+    if (not check_word(main_word)) or (not check_word(dep_word)):
         return
     depFeat = depFeat.split()
     mainFeat = mainFeat.split()
-    depVariants = getParseByPymorphy(depWord, depFeat, depNormalForm, morph.parse(depWord))
-    mainVariants = getParseByPymorphy(mainWord, mainFeat, mainNormalForm, morph.parse(mainWord))
+    depVariants = getParseByPymorphy(dep_word, depFeat, depNormalForm, morph.parse(dep_word))
+    mainVariants = getParseByPymorphy(main_word, mainFeat, mainNormalForm, morph.parse(main_word))
     if depVariants == [] or mainVariants == []:
         return
     depVariants = deleteCPIFromList(depVariants)
@@ -288,13 +287,13 @@ def insertPair(curPair, morph, con, cursor):
     mainVariantsNumbers = getNumberFromDB(mainVariants, con, cursor)
     insertAllPairs(con, cursor, mainVariantsNumbers, depVariantsNumbers)
 
-
+#610944- последняя сделанная
 morph = pymorphy2.MorphAnalyzer()
 con = psycopg2.connect(dbname='gpatterns', user='postgres',
                        password='postgres', host='localhost')
 with open('pairsList.pickle', 'rb') as f:
     pairsList = pickle.load(f)
-for i in range(len(pairsList)):
+for i in range(407785, len(pairsList)):
     print(i)
     curPair = pairsList[i]
     cursor = con.cursor()

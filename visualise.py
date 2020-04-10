@@ -2,12 +2,12 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
 
-numberWindows = 0
+number_windows = 0
 flag_control_tree = False
 
-def onMouseClickTree(event, dictParsePoints, pos):
+def on_mouse_click_tree(event, dict_parse_points, pos):
     # type: (matplotlib.backend_bases.MouseEvent) -> None
-    global numberWindows
+    global number_windows
 
     if event.dblclick:
         axes = event.inaxes
@@ -26,16 +26,16 @@ def onMouseClickTree(event, dictParsePoints, pos):
             if cur_dist_2 < min_dist_2:
                 near_point = word
                 min_dist_2 = cur_dist_2
-        parse_point = dictParsePoints[near_point]
+        parse_point = dict_parse_points[near_point]
         parse_point_visualize(parse_point, parse_point.__repr__())
         event.key = None
         plt.show()
 
-def parse_tree_visualize(graph, dictParsePoints, title):
+def parse_tree_visualize(graph, dict_parse_points, title):
     '''visualizate tree of parse'''
-    global numberWindows
-    numberWindows += 1
-    fig = plt.figure(numberWindows)
+    global number_windows
+    number_windows += 1
+    fig = plt.figure(number_windows)
     pos = graphviz_layout(graph, prog='dot')
     x_values, y_values = zip(*pos.values())
     x_max = max(x_values)
@@ -46,7 +46,7 @@ def parse_tree_visualize(graph, dictParsePoints, title):
     y_min = min(y_values)
     y_margin = (y_max - y_min) * 0.25
     plt.ylim(y_min - y_margin, y_max + y_margin)
-    fig.canvas.mpl_connect('button_press_event', lambda event: onMouseClickTree(event, dictParsePoints, pos))
+    fig.canvas.mpl_connect('button_press_event', lambda event: on_mouse_click_tree(event, dict_parse_points, pos))
 
     nx.draw_networkx_nodes(graph, pos, node_size=500, with_labels=True, node_color='silver')
     nx.draw(graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
@@ -56,7 +56,7 @@ def parse_tree_visualize(graph, dictParsePoints, title):
     plt.title(title)
     plt.show()
 
-def onMouseClickParsePoint(event, parsePoint, pos):
+def on_mouse_click_parse_point(event, parse_point, pos):
     # type: (matplotlib.backend_bases.MouseEvent) -> None
     if event.dblclick:
         # Координаты клика в системе координат осей
@@ -69,22 +69,22 @@ def onMouseClickParsePoint(event, parsePoint, pos):
             if cur_dist_2 < min_dist_2:
                 near_word = word
                 min_dist_2 = cur_dist_2
-        wordBorder = near_word.rfind('_')
-        numberWord = int(near_word[wordBorder+ 1:])
-        textWord = near_word[:wordBorder]
-        w = textWord + ' - ' + parsePoint.parsePointWordList[numberWord].usedMorphAnswer.__repr__()
-        global numberWindows
-        numberWindows += 1
-        plt.figure(numberWindows, figsize=(0.5 + 0.12 * len(w),0.5)) # потом сделать возможность нескольких окон
+        word_border = near_word.rfind('_')
+        number_word = int(near_word[word_border+ 1:])
+        text_word = near_word[:word_border]
+        w = text_word + ' - ' + parse_point.parse_point_word_list[number_word].used_morph_answer.__repr__()
+        global number_windows
+        number_windows += 1
+        plt.figure(number_windows, figsize=(0.5 + 0.12 * len(w),0.5)) # потом сделать возможность нескольких окон
         plt.axis('off')
         plt.text(0, 0.5, w, size = 15)
         plt.show()
 
 def parse_point_visualize(parse_point, name):
-        global numberWindows
-        numberWindows += 1
+        global number_windows
+        number_windows += 1
         graph = parse_point.graph
-        fig = plt.figure(numberWindows)
+        fig = plt.figure(number_windows)
         pos = graphviz_layout(graph, prog='dot')
         x_values, y_values = zip(*pos.values())
         x_max = max(x_values)
@@ -95,7 +95,7 @@ def parse_point_visualize(parse_point, name):
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
         plt.ylim(y_min - y_margin, y_max + y_margin)
-        fig.canvas.mpl_connect('button_press_event', lambda event: onMouseClickParsePoint(event, parse_point, pos))
+        fig.canvas.mpl_connect('button_press_event', lambda event: on_mouse_click_parse_point(event, parse_point, pos))
         nx.draw(graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
                 verticalalignment='top', font_size=20)
         plt.title(name)

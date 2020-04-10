@@ -1,19 +1,18 @@
 -- Database generated with pgModeler (PostgreSQL Database Modeler).
--- pgModeler  version: 0.9.1-beta
+-- pgModeler  version: 0.9.1
 -- PostgreSQL version: 10.0
--- Project Site: pgmodeler.com.br
+-- Project Site: pgmodeler.io
 -- Model Author: ---
 
 SET check_function_bodies = false;
 -- ddl-end --
 
 
--- Database creation must be done outside an multicommand file.
--- These commands were put in this file only for convenience.
+-- Database creation must be done outside a multicommand file.
+-- These commands were put in this file only as a convenience.
 -- -- object: gpatterns | type: DATABASE --
 -- -- DROP DATABASE IF EXISTS gpatterns;
--- CREATE DATABASE gpatterns
--- ;
+-- CREATE DATABASE gpatterns;
 -- -- ddl-end --
 -- 
 
@@ -169,7 +168,7 @@ ALTER TYPE public.estatic OWNER TO postgres;
 -- object: public.epreptype | type: TYPE --
 -- DROP TYPE IF EXISTS public.epreptype CASCADE;
 CREATE TYPE public.epreptype AS
- ENUM ('a','dap','gai','ai','ap','d','gd','g','gi','i','p','not_imp');
+ ENUM ('a','dap','gai','ai','ap','d','gd','g','gi','i','p','not_imp','prep_type_any');
 -- ddl-end --
 ALTER TYPE public.epreptype OWNER TO postgres;
 -- ddl-end --
@@ -215,13 +214,27 @@ ALTER TABLE public.morph_constraints OWNER TO postgres;
 -- DROP FUNCTION IF EXISTS public.create_mark_1(double precision,integer,integer) CASCADE;
 CREATE FUNCTION public.create_mark_1 ( all_mark double precision,  mm integer,  dm integer)
 	RETURNS double precision
-	LANGUAGE sql
+	LANGUAGE plpgsql
 	VOLATILE 
 	CALLED ON NULL INPUT
 	SECURITY INVOKER
 	COST 1
 	AS $$
-select all_mark / get_mark_1_dep_morph(mm) / get_mark_1_dep_morph(dm)
+DECLARE
+    res public.gpattern_1_level.mark%TYPE ;
+    cur_mark public.gpattern_1_level.mark%TYPE ;
+BEGIN
+    res := ln(all_mark);
+    cur_mark := public.get_mark_1_main_morph(mm);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    cur_mark := public.get_mark_1_dep_morph(dm);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    return res;
+END ;
 $$;
 -- ddl-end --
 ALTER FUNCTION public.create_mark_1(double precision,integer,integer) OWNER TO postgres;
@@ -231,13 +244,31 @@ ALTER FUNCTION public.create_mark_1(double precision,integer,integer) OWNER TO p
 -- DROP FUNCTION IF EXISTS public.create_mark_2(double precision,integer,integer,integer) CASCADE;
 CREATE FUNCTION public.create_mark_2 ( all_mark double precision,  mm integer,  dm integer,  mw integer)
 	RETURNS double precision
-	LANGUAGE sql
+	LANGUAGE plpgsql
 	VOLATILE 
 	CALLED ON NULL INPUT
 	SECURITY INVOKER
 	COST 1
 	AS $$
-select all_mark / get_mark_2_main_morph(mm) /get_mark_2_dep_morph(dm)/get_mark_2_main_word(mw)
+DECLARE
+    res public.gpattern_2_level.mark%TYPE ;
+    cur_mark public.gpattern_2_level.mark%TYPE ;
+BEGIN
+    res := ln(all_mark);
+    cur_mark := public.get_mark_2_main_morph(mm);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    cur_mark := public.get_mark_2_dep_morph(dm);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    cur_mark := public.get_mark_2_main_word(mw);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    return res;
+END ;
 $$;
 -- ddl-end --
 ALTER FUNCTION public.create_mark_2(double precision,integer,integer,integer) OWNER TO postgres;
@@ -247,13 +278,35 @@ ALTER FUNCTION public.create_mark_2(double precision,integer,integer,integer) OW
 -- DROP FUNCTION IF EXISTS public.create_mark_3(double precision,integer,integer,integer,integer) CASCADE;
 CREATE FUNCTION public.create_mark_3 ( all_mark double precision,  mm integer,  dm integer,  mw integer,  dw integer)
 	RETURNS double precision
-	LANGUAGE sql
+	LANGUAGE plpgsql
 	VOLATILE 
 	CALLED ON NULL INPUT
 	SECURITY INVOKER
 	COST 1
 	AS $$
-select all_mark /get_mark_3_main_morph(mm) / get_mark_3_dep_morph(dm) / get_mark_3_main_word(mw)/ get_mark_3_dep_word(dw)
+DECLARE
+    res public.gpattern_3_level.mark%TYPE ;
+    cur_mark public.gpattern_3_level.mark%TYPE ;
+BEGIN
+    res := ln(all_mark);
+    cur_mark := public.get_mark_3_main_morph(mm);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    cur_mark := public.get_mark_3_dep_morph(dm);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    cur_mark := public.get_mark_3_main_word(mw);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    cur_mark := public.get_mark_3_dep_word(dw);
+    IF cur_mark <> 0 THEN
+        res := res - ln(cur_mark);
+    END IF;
+    return res;
+END ;
 $$;
 -- ddl-end --
 ALTER FUNCTION public.create_mark_3(double precision,integer,integer,integer,integer) OWNER TO postgres;
@@ -893,13 +946,14 @@ begin
 													t4 as (select sum(mark) as dm2, dep_morph as id from gpattern_2_level group by dep_morph),
 													t5 as (select sum(mark) as mm3, main_morph as id from gpattern_3_level group by main_morph),
 													t6 as (select sum(mark) as dm3, dep_morph as id from gpattern_3_level group by dep_morph),
-													t as (select t1.mm1, t2.dm1, t3.mm2, t4.dm2, t5.mm3, t6.dm3, t1.id from t1 full join t2 on t1.id = t2.id full join t3 on t1.id = t3.id full join t4 on t1.id = t4.id full join t5 on t1.id = t5.id full join t6 on t1.id = t6.id)
+													t as (select t1.mm1, t2.dm1, t3.mm2, t4.dm2, t5.mm3, t6.dm3, coalesce(t1.id, t2.id, t3.id, t4.id, t5.id, t6.id) as id from t1 full join t2 on t1.id = t2.id full join t3 on t3.id = coalesce(t1.id, t2.id) full join t4 on t4.id = coalesce(t1.id, t2.id, t3.id) full join t5 on t5.id = coalesce(t1.id, t2.id, t3.id, t4.id) full join t6 on t6.id = coalesce(t1.id, t2.id, t3.id, t4.id, t5.id))
 													update public.morph_occurence set (main_1, dep_1, main_2, dep_2, main_3, dep_3) = (t.mm1, t.dm1, t.mm2, t.dm2, t.mm3, t.dm3)  from t where t.id = morph_occurence.id;
-											  with t1 as (select sum(mark) as mw2, main_word as id from gpattern_2_level group by main_word), 
-											  t2 as (select sum(mark) as mw3, main_word as id from gpattern_3_level group by main_word),
-											  t3 as (select sum(mark) as dw3, dep_word as id from gpattern_3_level group by dep_word),
-											  	t as (select t1.mw2, t2.mw3, t3.dw3, t1.id from t1 full join t2 on t1.id = t2.id full join t3 on t1.id = t3.id )
-											  update public.word_occurence set (main_2, main_3, dep_3) = (t.mw2, t.mw3, t.dw3)  from t where t.id = word_occurence.id;
+													with 
+													t1 as (select sum(mark) as mw2, main_word as id from gpattern_2_level group by main_word), 
+													t2 as (select sum(mark) as mw3, main_word as id from gpattern_3_level group by main_word),
+													t3 as (select sum(mark) as dw3, dep_word as id from gpattern_3_level group by dep_word),
+													t as (select t1.mw2, t2.mw3, t3.dw3, coalesce(t1.id, t2.id, t3.id) as id from t1 full join t2 on t1.id = t2.id full join t3 on t3.id = coalesce(t1.id, t2.id))
+													update public.word_occurence set (main_2, main_3, dep_3) = (t.mw2, t.mw3, t.dw3)  from t where t.id = word_occurence.id;
 				end if;
 				return null;
 end;

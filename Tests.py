@@ -80,13 +80,13 @@ a1 =  parse(con, "Маленький мальчик хочет спать.",  Tr
 s = Sentence()
 str1 = "Взрослые люди ходят на работу."
 s.setString(str1)
-s.morphParse()
+s.morph_parse()
 s.getGPatterns(con)
-res = s.sintParse()
-res.visualizate(s.firstParseWordsIndices)
+res = s.sint_parse()
+res.visualizate(s.first_parse_words_indices)
 for i in range(10):
-    res1 = s.sintParse()
-    res1.visualizate(s.firstParseWordsIndices)
+    res1 = s.sint_parse()
+    res1.visualizate(s.first_parse_words_indices)
 a1 = parse(con, "Маленький мальчик хочет спать.")
 a1 = parse(con, "Каждый час имеет свое чудо.", True)
 a1 = parse(con, "Памятник себе воздвиг нерукотворный.", True)
