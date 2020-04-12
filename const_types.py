@@ -135,8 +135,8 @@ class Morph:  # для хранения морфологических хара�
 
 
 class GPattern:
-    def __init__(self, l, mw, dw, mark, mc, dc):
-        self.level = l
+    def __init__(self, level, mw, dw, mark, mc, dc):
+        self.level = level
         self.main_word = mw
         self.dependentWord = dw
         self.mark = mark

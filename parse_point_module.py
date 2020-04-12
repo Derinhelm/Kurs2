@@ -1,16 +1,17 @@
 import copy
 
 import networkx as nx
+import pymorphy2
 
 from attempts_module import Attempts
-from functions import get_patterns
 from const_types import Morph
+from functions import get_patterns
 
 
 class WordForm:
-    def __init__(self, con, morph, normal_form):
+    def __init__(self, con, morph: Morph, normal_form):
         self.normal_form = normal_form
-        self.morph = morph
+        self.morph: Morph = morph
         self.g_patterns = []  # список из Gpattern, в которых данная словоформа мб главной
         self.create_patterns(con)
 
@@ -34,20 +35,20 @@ class WordForm:
 
 
 class Word:
-    def __init__(self, con, morph, word_text, number=-1):
+    def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text, number=-1):
         self.word_text = word_text
         self.forms = []
         self.number_in_sentence = number
-        self.morph_parse(con, morph)
+        self.morph_parse(con, morph_analyzer)
 
     # toDo number_in_sentence убрать
 
-    def morph_parse(self, con, morph):
+    def morph_parse(self, con, morph_analyzer: pymorphy2.MorphAnalyzer):
         if self.word_text[-1] == '.':
-            p = morph.parse(self.word_text[:-1])
+            p = morph_analyzer.parse(self.word_text[:-1])
             abbr = True
         else:
-            p = morph.parse(self.word_text)
+            p = morph_analyzer.parse(self.word_text)
             abbr = False
         for cur_parse in p:
             if (abbr and 'Abbr' in cur_parse.tag) or \
@@ -102,7 +103,6 @@ class ParsePoint:
                 return i
         return None
 
-    # noinspection PyUnusedLocal
     @staticmethod
     def check_inderect_dependency(self, number_main, number_dep):
         # dep_word = self.parse_point_word_list[number_dep]
@@ -114,7 +114,7 @@ class ParsePoint:
         return True  # toDo ПЕРЕПИСАТЬ!!!!!
 
     def apply(self, main_pp_word, depending_pp_word, used_morph_answer, g_pattern_to_apply, max_number_point):
-        '''create and return new child ParsePoint'''
+        """create and return new child ParsePoint"""
         new_word_list = copy.deepcopy(self.parse_point_word_list)
         new_word_list[depending_pp_word].parsed = True
         new_word_list[depending_pp_word].used_morph_answer = used_morph_answer
@@ -157,12 +157,12 @@ class ParsePoint:
                     new_parse_point = ParsePoint(new_word_list, [], 0, 1, [], number_child_point, att, g)
                     number_child_point += 1
                     list_new_parse_points.append(new_parse_point)
-            if list_new_parse_points != []:
+            if list_new_parse_points:
                 return list_new_parse_points, [i]
         return None
 
     def get_new_parse_point(self, max_number_point):
-        '''create new ParsePoint, child for self'''
+        """create new ParsePoint, child for self"""
         print("------")
         att_res = self.attempts.next()
         # print(ans)
@@ -176,7 +176,7 @@ class ParsePoint:
         return new_parse_point, pot_pattern
 
     def check_end_parse(self):
-        '''check that all words in this ParsePoint are parsed'''
+        """check that all words in this ParsePoint are parsed"""
         # вроде достаточно проверять self.attempts.flag_end
         for cur_point_word in self.parse_point_word_list:
             if not cur_point_word.parsed:

@@ -4,7 +4,7 @@ SIMILAR_PARAM = 450
 
 
 def find_best_pattern_in_list(param_list):
-    '''find the best pair main word + pattern, return number of this pair'''
+    """find the best pair main word + pattern, return number of this pair"""
     # param_list - вида [(номер главного слова, модель управления)]
     best_pattern_1_number, best_pattern_2_number, best_pattern_3_number = None, None, None
     mark_best_pattern_1, mark_best_pattern_2, mark_best_pattern_3 = -1009090909090, -1090909090, -109090909090909
@@ -85,8 +85,7 @@ def find_best_pattern_in_list(param_list):
     #    return None
 
 
-# noinspection PySimplifyBooleanCheck
-class dep_words:
+class DepWords:
     def __init__(self, dep, cur_main):
         self.left_dep_words = copy.deepcopy(dep)
         self.left_dep_words = list(filter(lambda x: x[0] < cur_main, self.left_dep_words))
@@ -97,7 +96,7 @@ class dep_words:
         self.flag_other_direction = False
         self.point_cur_dep = 0
         self.flag_end = False
-        if self.dep_words != []:
+        if self.dep_words:
             self.cur_dep = self.dep_words[self.point_cur_dep]
         else:
             self.cur_dep = None
@@ -147,8 +146,7 @@ class dep_words:
 
     def delete_from_two_part(self, delete_dep_number):
         left_part = list(filter(lambda x: x[0] == delete_dep_number, self.left_dep_words))
-        # noinspection PySimplifyBooleanCheck
-        if left_part != []:
+        if left_part:
             # удаляемое в левой половине
             if self.dep_direction == -1:
                 # левая часть - текущая
@@ -179,7 +177,6 @@ class dep_words:
         return None
 
 
-# noinspection PyComparisonWithNone
 class Attempts:
     def __init__(self, main_word_index, pattterns_main_word, dep, all_patterns_list_param, morph_position,
                  word_position):
@@ -198,7 +195,6 @@ class Attempts:
         self.morph_position = morph_position
         self.word_position = word_position
 
-    # noinspection PyComparisonWithNone
     def next(self):
         if self.current_dep is not None:
             new_dep = self.current_dep.next()
@@ -221,9 +217,8 @@ class Attempts:
         current_dep = self.get_dep_for_new_pair_main_pattern(current_main, current_pattern)
         return number_of_best_pair, current_dep
 
-    # noinspection PyComparisonWithNone
     def next_main_pattern(self):
-        '''Используется только для получения новой пары главное+модель, старая себя исчерпала'''
+        """Используется только для получения новой пары главное+модель, старая себя исчерпала"""
         # ищем пару (главное слово, модель) с максимальной оценкой(лучше 3 уровня, потом 2, потом 1)
         if self.current_main_pattern_index is not None:
             # удаляем пару (главное, модель) из списка и из словаря,
@@ -256,7 +251,7 @@ class Attempts:
         self.dependents_list = new_dependents_list
 
     def apply(self):
-        '''current_dep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым'''
+        """current_dep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым"""
         new_parsed = self.current_dep.cur_dep[0]
         self.add_new_main_patterns(self.current_dep.cur_dep)
         deleted_keys = []
@@ -278,7 +273,6 @@ class Attempts:
             self.dep_dict[(self.current_main, self.current_pattern)] = self.current_dep
         self.current_dep = None
 
-    # noinspection PyComparisonWithNone
     def create_dep(self, pattern, main_index):
         morph_constraints = pattern.get_dep_morph_constraints()
         word_constraints = pattern.get_dep_word()
@@ -297,7 +291,7 @@ class Attempts:
         if itog_set == set():
             return None
         dep_pos_vars_for_constraints = sorted(itog_set)
-        return dep_words(dep_pos_vars_for_constraints, main_index)
+        return DepWords(dep_pos_vars_for_constraints, main_index)
 
     def add_new_main_patterns(self, new_main):
         cur_main = new_main[0]
