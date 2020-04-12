@@ -4,7 +4,7 @@ SIMILAR_PARAM = 450
 
 
 def find_best_pattern_in_list(param_list):
-    '''find the best pair main word + pattern, return number of this pair'''
+    """find the best pair main word + pattern, return number of this pair"""
     # param_list - вида [(номер главного слова, модель управления)]
     best_pattern_1_number, best_pattern_2_number, best_pattern_3_number = None, None, None
     mark_best_pattern_1, mark_best_pattern_2, mark_best_pattern_3 = -1009090909090, -1090909090, -109090909090909
@@ -223,7 +223,7 @@ class Attempts:
 
     # noinspection PyComparisonWithNone
     def next_main_pattern(self):
-        '''Используется только для получения новой пары главное+модель, старая себя исчерпала'''
+        """Используется только для получения новой пары главное+модель, старая себя исчерпала"""
         # ищем пару (главное слово, модель) с максимальной оценкой(лучше 3 уровня, потом 2, потом 1)
         if self.current_main_pattern_index is not None:
             # удаляем пару (главное, модель) из списка и из словаря,
@@ -256,7 +256,7 @@ class Attempts:
         self.dependents_list = new_dependents_list
 
     def apply(self):
-        '''current_dep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым'''
+        """current_dep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым"""
         new_parsed = self.current_dep.cur_dep[0]
         self.add_new_main_patterns(self.current_dep.cur_dep)
         deleted_keys = []

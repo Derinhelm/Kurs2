@@ -3,8 +3,8 @@ import copy
 import networkx as nx
 
 from attempts_module import Attempts
-from functions import get_patterns
 from const_types import Morph
+from functions import get_patterns
 
 
 class WordForm:
@@ -162,7 +162,7 @@ class ParsePoint:
         return None
 
     def get_new_parse_point(self, max_number_point):
-        '''create new ParsePoint, child for self'''
+        """create new ParsePoint, child for self"""
         print("------")
         att_res = self.attempts.next()
         # print(ans)
@@ -176,7 +176,7 @@ class ParsePoint:
         return new_parse_point, pot_pattern
 
     def check_end_parse(self):
-        '''check that all words in this ParsePoint are parsed'''
+        """check that all words in this ParsePoint are parsed"""
         # вроде достаточно проверять self.attempts.flag_end
         for cur_point_word in self.parse_point_word_list:
             if not cur_point_word.parsed:

@@ -107,9 +107,9 @@ class Sentence:
             # в предложении нет глагола
             noun_res = \
                 self.root_p_p.find_first_word(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative',
-                                            all_word_variants_list, self.all_patterns_list,
-                                            self.morph_position,
-                                            self.word_position)
+                                              all_word_variants_list, self.all_patterns_list,
+                                              self.morph_position,
+                                              self.word_position)
             if noun_res is not None:
                 (list_new_parse_points, first_words) = noun_res
             else:
@@ -134,7 +134,7 @@ class Sentence:
             self.dict_parse_points[child_name] = cur_child
 
     def insert_new_parse_point(self, new_point):
-        '''insert new ParsePoint into best_parse_points'''
+        """insert new ParsePoint into best_parse_points"""
         self.best_parse_points.insert(0, new_point)
 
     def get_best_parse_point(self):

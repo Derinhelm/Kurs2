@@ -1,5 +1,6 @@
-import xml.dom.minidom
 import pickle
+import xml.dom.minidom
+
 
 class WordFromCorpora:
     def __init__(self, id, dom, feat, word, normalForm):
@@ -8,6 +9,7 @@ class WordFromCorpora:
         self.feat = feat
         self.word = word
         self.normalForm = normalForm
+
 
 def parseXML(nameFile):
     doc = xml.dom.minidom.parse(nameFile)
@@ -19,13 +21,13 @@ def parseXML(nameFile):
         newSentence = []
         for child in item.getElementsByTagName('W'):  # слова с пробелами пока не учитываем
             if len(child.childNodes) != 0:
-                (id1, dom, feat, word, normWord) = (child.getAttribute('ID'), child.getAttribute('DOM'), \
-                                                    child.getAttribute('FEAT'), \
+                (id1, dom, feat, word, normWord) = (child.getAttribute('ID'), child.getAttribute('DOM'),
+                                                    child.getAttribute('FEAT'),
                                                     child.childNodes[0].nodeValue, child.getAttribute('LEMMA'))
                 word = word.lower()
             else:
-                (id1, dom, feat, word, normWord) = (child.getAttribute('ID'), child.getAttribute('DOM'), \
-                                                    child.getAttribute('FEAT'), \
+                (id1, dom, feat, word, normWord) = (child.getAttribute('ID'), child.getAttribute('DOM'),
+                                                    child.getAttribute('FEAT'),
                                                     None, child.getAttribute('LEMMA'))
             normWord = normWord.lower()
             newWord = WordFromCorpora(id1, dom, feat, word, normWord)
@@ -44,7 +46,7 @@ def insert(nameFile, textTitle, pairsList):
             if curWord.dom != '_root':
                 mainWord = curSentence[int(curWord.dom) - 1]
                 newPair = (mainWord.word, mainWord.normalForm, mainWord.feat, curWord.word,
-                                               curWord.normalForm, curWord.feat, textTitle, sentenceNumber + 1)
+                           curWord.normalForm, curWord.feat, textTitle, sentenceNumber + 1)
                 pairsList.append(newPair)
 
 
@@ -153,7 +155,7 @@ nameFiles = ['Algoritm.tgt', 'Alpinizm.tgt', 'Andrei_Ashkerov.tgt', 'Anketa.tgt'
              'Kak_voevat_s_lzhenaukoi.tgt', 'Kak_zakupat_dorogostoyashchee_oborudovanie.tgt', 'Kamennyi_roi.tgt',
              'Kaprossiya.tgt', 'Karpov-Kasparov.tgt', 'Katastrofa.tgt', 'Katyn.tgt', 'Khidzhaby_ne_zakazyvali.tgt',
              'Kholodnaya_voina.tgt', 'Mezhdunarodnaya_olimpiada.tgt', 'MGU.tgt', 'Minfin_protiv_Glazieva.tgt',
-             'Misha.tgt', \
+             'Misha.tgt',
              'Molodezh.tgt', 'Molodtsy.tgt', 'Monopolizatsiya_kanalizatsii.tgt', 'Moskva_privlekaet_menshe.tgt',
              'Mozgi_naprokat.tgt', 'Muzei.tgt', 'Muzhei_ne_obeshchal.tgt', 'Nadpisi_iz_doliny_Inda.tgt',
              'Nagibin_1.tgt', 'Nagibin_2.tgt', 'Nagibin_3.tgt', 'Nagibin_4.tgt', 'Nalogovaya_sistema.tgt',
@@ -207,4 +209,4 @@ for i in range(len(nameFiles)):
     print(len(pairsList))
 
 with open('pairsList.pickle', 'wb') as f:
-   pickle.dump(pairsList, f)
+    pickle.dump(pairsList, f)

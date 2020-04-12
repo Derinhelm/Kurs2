@@ -1,10 +1,12 @@
+import sys
+
 import PyQt5.QtGui
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QDesktopWidget, QHeaderView, QSlider,
-                             QApplication, QLabel, QGridLayout, QVBoxLayout, QPushButton, QLineEdit, QTableWidget,
-                             QTableWidgetItem)
-import sys
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QDesktopWidget, QApplication, QLabel, QVBoxLayout, QPushButton,
+                             QLineEdit)
+
 from main import easy_parse
+
 
 class BeginWindow(QWidget):
     def __init__(self, parent=None, first_flag=False):
@@ -31,7 +33,6 @@ class BeginWindow(QWidget):
         hbox2.addWidget(count_title)
         hbox2.addWidget(self.count)
 
-
         self.beginButton = QPushButton("Начать разбор")
         self.beginButton.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Bold))
         self.beginButton.clicked.connect(self.open_win)
@@ -43,7 +44,6 @@ class BeginWindow(QWidget):
         vbox.addLayout(hbox)
         vbox.addLayout(hbox2)
         vbox.addLayout(hbox3)
-
 
         self.setLayout(vbox)
 
@@ -61,6 +61,7 @@ class BeginWindow(QWidget):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
+
 app = QApplication(sys.argv)
-window = BeginWindow(first_flag = True)
+window = BeginWindow(first_flag=True)
 sys.exit(app.exec_())
