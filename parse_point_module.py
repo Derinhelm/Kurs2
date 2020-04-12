@@ -102,7 +102,6 @@ class ParsePoint:
                 return i
         return None
 
-    # noinspection PyUnusedLocal
     @staticmethod
     def check_inderect_dependency(self, number_main, number_dep):
         # dep_word = self.parse_point_word_list[number_dep]
@@ -114,7 +113,7 @@ class ParsePoint:
         return True  # toDo ПЕРЕПИСАТЬ!!!!!
 
     def apply(self, main_pp_word, depending_pp_word, used_morph_answer, g_pattern_to_apply, max_number_point):
-        '''create and return new child ParsePoint'''
+        """create and return new child ParsePoint"""
         new_word_list = copy.deepcopy(self.parse_point_word_list)
         new_word_list[depending_pp_word].parsed = True
         new_word_list[depending_pp_word].used_morph_answer = used_morph_answer
@@ -157,7 +156,7 @@ class ParsePoint:
                     new_parse_point = ParsePoint(new_word_list, [], 0, 1, [], number_child_point, att, g)
                     number_child_point += 1
                     list_new_parse_points.append(new_parse_point)
-            if list_new_parse_points != []:
+            if list_new_parse_points:
                 return list_new_parse_points, [i]
         return None
 

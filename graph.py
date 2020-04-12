@@ -62,6 +62,7 @@ class BeginWindow(QWidget):
         self.move(qr.topLeft())
 
 
-app = QApplication(sys.argv)
-window = BeginWindow(first_flag=True)
-sys.exit(app.exec_())
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = BeginWindow(first_flag=True)
+    sys.exit(app.exec_())

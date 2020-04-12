@@ -7,7 +7,6 @@ flag_control_tree = False
 
 
 def on_mouse_click_tree(event, dict_parse_points, pos):
-    # type: (matplotlib.backend_bases.MouseEvent) -> None
     global number_windows
 
     if event.dblclick:
@@ -60,7 +59,6 @@ def parse_tree_visualize(graph, dict_parse_points, title):
 
 
 def on_mouse_click_parse_point(event, parse_point, pos):
-    # type: (matplotlib.backend_bases.MouseEvent) -> None
     if event.dblclick:
         # Координаты клика в системе координат осей
         x = event.xdata

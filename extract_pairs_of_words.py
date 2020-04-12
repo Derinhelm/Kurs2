@@ -3,8 +3,8 @@ import xml.dom.minidom
 
 
 class WordFromCorpora:
-    def __init__(self, id, dom, feat, word, normalForm):
-        self.id = id
+    def __init__(self, word_id, dom, feat, word, normalForm):
+        self.id = word_id
         self.dom = dom
         self.feat = feat
         self.word = word
@@ -16,7 +16,7 @@ def parseXML(nameFile):
     # а зачем храним id(на всякий случай), вообще-то можно и не хранить, id = index + 1
     arrayParseSentences = []
     parent = doc.getElementsByTagName('S')
-    i = 1
+    index = 1
     for item in parent:
         newSentence = []
         for child in item.getElementsByTagName('W'):  # слова с пробелами пока не учитываем
@@ -33,7 +33,7 @@ def parseXML(nameFile):
             newWord = WordFromCorpora(id1, dom, feat, word, normWord)
             newSentence.append(newWord)
         arrayParseSentences.append(newSentence)
-        i += 1
+        index += 1
     return arrayParseSentences
 
 
@@ -199,14 +199,15 @@ nameFiles = ['Algoritm.tgt', 'Alpinizm.tgt', 'Andrei_Ashkerov.tgt', 'Anketa.tgt'
              'Korp_720.tgt', 'Korp_721.tgt', 'Korp_722.tgt', 'Korp_723.tgt', 'Korp_724.tgt', 'Korp_725.tgt',
              'Korp_726.tgt', 'Korrektsiya_mifov.tgt', 'Korrida.tgt', 'Koshki.tgt', 'Kovcheg_Zhana_Vanie.tgt']
 
-pairsList = []
-for i in range(len(nameFiles)):
-    textTitle = nameFiles[i]
-    print("---------------------------------")
-    print(i, textTitle)
-    allName = "all/" + textTitle
-    insert(allName, textTitle, pairsList)
-    print(len(pairsList))
+if __name__ == '__main__':
+    pairsList = []
+    for i in range(len(nameFiles)):
+        textTitle = nameFiles[i]
+        print("---------------------------------")
+        print(i, textTitle)
+        allName = "all/" + textTitle
+        insert(allName, textTitle, pairsList)
+        print(len(pairsList))
 
-with open('pairsList.pickle', 'wb') as f:
-    pickle.dump(pairsList, f)
+    with open('pairsList.pickle', 'wb') as f:
+        pickle.dump(pairsList, f)

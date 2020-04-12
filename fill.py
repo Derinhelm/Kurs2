@@ -95,7 +95,7 @@ def parseCorporaTag(tagCorpora):
         elif cur_param == 'МН':
             checkFuns.append(lambda m: m.number == 'plural')
 
-        if not cur_param in ['СЛ', 'COM', 'СМЯГ', 'НЕСТАНД', 'МЕТА', 'НЕПРАВ']:
+        if cur_param not in ['СЛ', 'COM', 'СМЯГ', 'НЕСТАНД', 'МЕТА', 'НЕПРАВ']:
             impFeatures.add(corporaToImpMorph[cur_param])
     return checkFuns, impFeatures
 
@@ -110,7 +110,7 @@ def eqNormForm(s1, s2, parseS2):
     if s1.replace("ё", "е") == s2.replace("ё", "е"):
         return True
     s2Impf = parseS2.inflect({'INFN', 'impf'})
-    if s2Impf != None and parseS2.tag.POS == 'INFN' and s1 == s2Impf.word:
+    if s2Impf is not None and parseS2.tag.POS == 'INFN' and s1 == s2Impf.word:
         # приводим второе слово в несов.вид
         # print(s1, s2)
         return True
@@ -123,7 +123,7 @@ def eqNormForm(s1, s2, parseS2):
 def getParseByPymorphy(curWord, curTagCorpora, curNormalForm, arrParse):
     """return list of pairs (morph, normal form)"""
     (checkFuns, impFeatures) = parseCorporaTag(curTagCorpora)
-    if impFeatures == None:  # слово типа NID, 'as-sifr'
+    if impFeatures is None:  # слово типа NID, 'as-sifr'
         return []
     # print(curWord, curTagCorpora, curNormalForm, arrParse)
     notImpFeat = set(copy.copy(Morph.names)) - impFeatures
@@ -136,7 +136,7 @@ def getParseByPymorphy(curWord, curTagCorpora, curNormalForm, arrParse):
             # для глаголов пока не требуем совпадения начальных форм
             m = Morph(cur_parse, curWord)
             nw = cur_parse.normal_form  # начальная форма слова
-            if m != None:
+            if m is not None:
                 flagTrueParse = True
                 for curCheckFun in checkFuns:
                     if not curCheckFun(m):
@@ -145,7 +145,7 @@ def getParseByPymorphy(curWord, curTagCorpora, curNormalForm, arrParse):
                 if flagTrueParse:
                     for curField in notImpFeat:
                         setattr(m, curField, 'not_imp')
-                    if not m in goodParsePymorphy:
+                    if m not in goodParsePymorphy:
                         goodParsePymorphy += [(m, nw)]
     # else:
     # f.write(cur_parse.normal_form)
@@ -182,61 +182,61 @@ def getNumberFromDB(variantsList, con, cursor):
 
 def insertPattern3(con, cursor, mainMorphNumber, depMorphNumber,
                    main_wordNumber, dep_wordNumber, mark):
-    comand = "SELECT id FROM gpattern_3_level WHERE " + \
-             "main_morph = %s AND dep_morph = %s AND " + \
-             "main_word = %s AND dep_word = %s;"
+    command = "SELECT id FROM gpattern_3_level WHERE " + \
+              "main_morph = %s AND dep_morph = %s AND " + \
+              "main_word = %s AND dep_word = %s;"
     params = (mainMorphNumber, depMorphNumber,
               main_wordNumber, dep_wordNumber)
-    cursor.execute(comand, params)
+    cursor.execute(command, params)
     ind = cursor.fetchall()
     if len(ind) == 0:
-        comand = "INSERT INTO gpattern_3_level " + \
-                 "VALUES(DEFAULT, %s, %s, %s, %s, " + str(mark) + ");"
-        cursor.execute(comand, params)
+        command = "INSERT INTO gpattern_3_level " + \
+                  "VALUES(DEFAULT, %s, %s, %s, %s, " + str(mark) + ");"
+        cursor.execute(command, params)
     else:
         number_gpattern = ind[0][0]
-        comand = "UPDATE gpattern_3_level " + \
-                 "SET mark = mark + " + str(mark) + " WHERE id = %s;"
-        cursor.execute(comand, (number_gpattern,))
+        command = "UPDATE gpattern_3_level " + \
+                  "SET mark = mark + " + str(mark) + " WHERE id = %s;"
+        cursor.execute(command, (number_gpattern,))
     con.commit()
 
 
 def insertPattern2(con, cursor, mainMorphNumber, depMorphNumber,
                    main_wordNumber, mark):
-    comand = "SELECT id FROM gpattern_2_level WHERE " + \
-             "main_morph = %s AND dep_morph = %s AND " + \
-             "main_word = %s;"
+    command = "SELECT id FROM gpattern_2_level WHERE " + \
+              "main_morph = %s AND dep_morph = %s AND " + \
+              "main_word = %s;"
     params = (mainMorphNumber, depMorphNumber,
               main_wordNumber)
-    cursor.execute(comand, params)
+    cursor.execute(command, params)
     ind = cursor.fetchall()
     if len(ind) == 0:
-        comand = "INSERT INTO gpattern_2_level " + \
-                 "VALUES(DEFAULT, %s, %s, %s, " + str(mark) + ");"
-        cursor.execute(comand, params)
+        command = "INSERT INTO gpattern_2_level " + \
+                  "VALUES(DEFAULT, %s, %s, %s, " + str(mark) + ");"
+        cursor.execute(command, params)
     else:
         number_gpattern = ind[0][0]
-        comand = "UPDATE gpattern_2_level " + \
-                 "SET mark = mark + " + str(mark) + " WHERE id = %s;"
-        cursor.execute(comand, (number_gpattern,))
+        command = "UPDATE gpattern_2_level " + \
+                  "SET mark = mark + " + str(mark) + " WHERE id = %s;"
+        cursor.execute(command, (number_gpattern,))
     con.commit()
 
 
 def insertPattern1(con, cursor, mainMorphNumber, depMorphNumber, mark):
-    comand = "SELECT id FROM gpattern_1_level WHERE " + \
-             "main_morph = %s AND dep_morph = %s;"
+    command = "SELECT id FROM gpattern_1_level WHERE " + \
+              "main_morph = %s AND dep_morph = %s;"
     params = (mainMorphNumber, depMorphNumber)
-    cursor.execute(comand, params)
+    cursor.execute(command, params)
     ind = cursor.fetchall()
     if len(ind) == 0:
-        comand = "INSERT INTO gpattern_1_level " + \
-                 "VALUES(DEFAULT, %s, %s, " + str(mark) + ");"
-        cursor.execute(comand, params)
+        command = "INSERT INTO gpattern_1_level " + \
+                  "VALUES(DEFAULT, %s, %s, " + str(mark) + ");"
+        cursor.execute(command, params)
     else:
         number_gpattern = ind[0][0]
-        comand = "UPDATE gpattern_1_level " + \
-                 "SET mark = mark + " + str(mark) + " WHERE id = %s;"
-        cursor.execute(comand, (number_gpattern,))
+        command = "UPDATE gpattern_1_level " + \
+                  "SET mark = mark + " + str(mark) + " WHERE id = %s;"
+        cursor.execute(command, (number_gpattern,))
     con.commit()
 
 
@@ -267,7 +267,7 @@ def insertAllPairs(con, cursor, mainInserts, depInserts):
 
 
 def check_word(word):
-    if word == None:
+    if word is None:
         return False
     if word.count(" ") != 0:  # слова с пробелами пока не учитываем
         return False
@@ -294,15 +294,16 @@ def insertPair(curPair, morph, con, cursor):
     insertAllPairs(con, cursor, mainVariantsNumbers, depVariantsNumbers)
 
 
-# 610944- последняя сделанная
-morph = pymorphy2.MorphAnalyzer()
-con = psycopg2.connect(dbname='gpatterns', user='postgres',
-                       password='postgres', host='localhost')
-with open('pairsList.pickle', 'rb') as f:
-    pairsList = pickle.load(f)
-for i in range(407785, len(pairsList)):
-    print(i)
-    curPair = pairsList[i]
-    cursor = con.cursor()
-    insertPair(curPair, morph, con, cursor)
-    cursor.close()
+if __name__ == '__main__':
+    # 610944- последняя сделанная
+    morph = pymorphy2.MorphAnalyzer()
+    con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                           password='postgres', host='localhost')
+    with open('pairsList.pickle', 'rb') as f:
+        pairsList = pickle.load(f)
+    for i in range(407785, len(pairsList)):
+        print(i)
+        curPair = pairsList[i]
+        cursor = con.cursor()
+        insertPair(curPair, morph, con, cursor)
+        cursor.close()

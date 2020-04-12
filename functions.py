@@ -3,7 +3,7 @@ import pandas as pd
 from const_types import *
 
 
-def create_comand(level, where_str):
+def create_command(level, where_str):
     if level == 1:
         return "select null, null, " + \
                "create_mark_1(gp.mark, gp.main_morph, gp.dep_morph) as mark, " + \
@@ -115,8 +115,8 @@ def create_where(strict, main_morph_params, dep_morph_params, main_word_param, d
 def get_patterns_pandas(cursor, level, main_morph_params=None, dep_morph_params=None, main_word_param=None,
                         dep_word_param=None):
     where, params = create_where(True, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
-    comand = create_comand(level, where)
-    cursor.execute(comand, params)
+    command = create_command(level, where)
+    cursor.execute(command, params)
     res = cursor.fetchall()
     names = ['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective', 'transitive', 'person',
              'tense', 'voice', 'degree', 'static', 'prep_type']
@@ -132,10 +132,10 @@ def get_patterns_pandas(cursor, level, main_morph_params=None, dep_morph_params=
 def get_patterns(cursor, level, main_morph_params=None, dep_morph_params=None, main_word_param=None,
                  dep_word_param=None):
     where, params = create_where(False, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
-    comand = create_comand(level, where)
-    print(comand)
+    command = create_command(level, where)
+    print(command)
     print(params)
-    cursor.execute(comand, params)
+    cursor.execute(command, params)
     res = cursor.fetchall()
     patterns_list = []
     for pattern in res:

@@ -8,11 +8,12 @@ def dbInsertWord(con, w, cursor):
 
 def dbInsertMorph(con, m, cursor):
     # возвращает индекс, вставленного морфа
-    comand = 'INSERT INTO morph_constraints VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;'
+    command = 'INSERT INTO morph_constraints' \
+              ' VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;'
     params = (m.s_cl, m.animate, m.gender, m.number,
               m.case_morph, m.reflection, m.perfective, m.transitive,
               m.person, m.tense, m.voice, m.degree, m.static, m.prep_type)
-    cursor.execute(comand, params)
+    cursor.execute(command, params)
     con.commit()
     ind = cursor.fetchall()
     return ind[0][0]
@@ -20,25 +21,25 @@ def dbInsertMorph(con, m, cursor):
 
 def dbFindMorph(con, m, cursor):
     # здесь ответ - одно индекс !! Морфы все должны быть различны!!
-    comand = "SELECT id FROM morph_constraints WHERE " + \
-             "s_cl = %s AND " + \
-             "animate = %s AND " + \
-             "gender = %s AND " + \
-             "number = %s AND " + \
-             "case_morph = %s AND " + \
-             "reflection = %s AND " + \
-             "perfective = %s AND " + \
-             "transitive = %s AND " + \
-             "person = %s AND " + \
-             "tense = %s AND " + \
-             "voice = %s AND " + \
-             "degree = %s AND " + \
-             "static = %s AND " \
-             "prep_type = %s;"
+    command = "SELECT id FROM morph_constraints WHERE " + \
+              "s_cl = %s AND " + \
+              "animate = %s AND " + \
+              "gender = %s AND " + \
+              "number = %s AND " + \
+              "case_morph = %s AND " + \
+              "reflection = %s AND " + \
+              "perfective = %s AND " + \
+              "transitive = %s AND " + \
+              "person = %s AND " + \
+              "tense = %s AND " + \
+              "voice = %s AND " + \
+              "degree = %s AND " + \
+              "static = %s AND " \
+              "prep_type = %s;"
     params = (m.s_cl, m.animate, m.gender, m.number,
               m.case_morph, m.reflection, m.perfective, m.transitive,
               m.person, m.tense, m.voice, m.degree, m.static, m.prep_type)
-    cursor.execute(comand, params)
+    cursor.execute(command, params)
     ans = []
     for row in cursor:
         ans.append(row[0])
@@ -52,10 +53,10 @@ def dbFindMorph(con, m, cursor):
 
 
 def dbFindWord(con, w, cursor):
-    comand = "SELECT id FROM word WHERE " + \
-             "name = %s;"
+    command = "SELECT id FROM word WHERE " + \
+              "name = %s;"
     params = (w,)
-    cursor.execute(comand, params)
+    cursor.execute(command, params)
     ans = []
     for row in cursor:
         ans.append(row[0])
