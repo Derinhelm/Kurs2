@@ -6,7 +6,7 @@ from main import parse
 if __name__ == '__main__':
     con = psycopg2.connect(dbname='gpatterns_3', user='postgres',
                            password='postgres', host='localhost')
-    morph = pymorphy2.MorphAnalyzer()
+    morph_analyzer = pymorphy2.MorphAnalyzer()
 
     # str1 = "Идете домой с братом." Жуть
     # str1 = "Идите с братом домой."
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     # str1 = "Генерал зажмурился, бессильно сжав кулаки."
     # str1 = "Есть яблоки"
     # str1 = "От подножия лестницы начинался освещенный факелами коридор."
-    a1 = parse(con, morph, str1, 1, True)
+    a1 = parse(con, morph_analyzer, str1, 1, True)
     for i in a1:
         print(i)
 

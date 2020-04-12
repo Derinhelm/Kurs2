@@ -1,6 +1,7 @@
 import copy
 
 import networkx as nx
+import pymorphy2
 
 from attempts_module import Attempts
 from const_types import Morph
@@ -8,9 +9,9 @@ from functions import get_patterns
 
 
 class WordForm:
-    def __init__(self, con, morph, normal_form):
+    def __init__(self, con, morph: Morph, normal_form):
         self.normal_form = normal_form
-        self.morph = morph
+        self.morph: Morph = morph
         self.g_patterns = []  # список из Gpattern, в которых данная словоформа мб главной
         self.create_patterns(con)
 
@@ -34,20 +35,20 @@ class WordForm:
 
 
 class Word:
-    def __init__(self, con, morph, word_text, number=-1):
+    def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text, number=-1):
         self.word_text = word_text
         self.forms = []
         self.number_in_sentence = number
-        self.morph_parse(con, morph)
+        self.morph_parse(con, morph_analyzer)
 
     # toDo number_in_sentence убрать
 
-    def morph_parse(self, con, morph):
+    def morph_parse(self, con, morph_analyzer: pymorphy2.MorphAnalyzer):
         if self.word_text[-1] == '.':
-            p = morph.parse(self.word_text[:-1])
+            p = morph_analyzer.parse(self.word_text[:-1])
             abbr = True
         else:
-            p = morph.parse(self.word_text)
+            p = morph_analyzer.parse(self.word_text)
             abbr = False
         for cur_parse in p:
             if (abbr and 'Abbr' in cur_parse.tag) or \

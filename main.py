@@ -9,7 +9,7 @@ from visualise import parse_tree_visualize, parse_point_visualize
 
 
 class Sentence:
-    def __init__(self, con, morph, str1):
+    def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, str1):
         self.input_str = ""
         self.word_list = []
         self.root_p_p = None  # заполняется потом, с помощью get_root_parse_point
@@ -27,14 +27,14 @@ class Sentence:
         self.word_position = {}
         # ключ - нач.форма слова, значение - set из пар (позиция слова, номер варианта разбора)
 
-        self.set_string(con, morph, str1)
+        self.set_string(con, morph_analyzer, str1)
         self.create_dicts()
         self.create_all_patterns_list()
 
     def __repr__(self):
         return self.input_str
 
-    def set_string(self, con, morph, input_str1):
+    def set_string(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, input_str1):
         self.input_str = input_str1
         # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
         #: ; " ' началом предложения, запятой, (   ) тире вообще не учитываем(оно отделено пробелами),
@@ -48,13 +48,13 @@ class Sentence:
                     cur_symbol == '.' and (i == len(self.input_str) - 1 or self.input_str[i + 1] not in punctuation)):
                 # (cur_symbol == '.' ... - точка, но не сокращение
                 if len(cur_word) != 0:
-                    self.word_list.append(Word(con, morph, cur_word.lower(), number_word))
+                    self.word_list.append(Word(con, morph_analyzer, cur_word.lower(), number_word))
                     number_word += 1
                     cur_word = ""
             elif cur_symbol != '-' or (len(cur_word) != 0):  # - и непустое слово -  это дефис
                 cur_word = cur_word + cur_symbol
         if len(cur_word) != 0:
-            self.word_list.append(Word(con, morph, cur_word.lower(), number_word))
+            self.word_list.append(Word(con, morph_analyzer, cur_word.lower(), number_word))
 
     def add_morph_position(self, cur_morph_form, position_info):
         for cur_param in cur_morph_form.get_imp():
@@ -179,8 +179,8 @@ class WordResult:
         return "Не разобрано"
 
 
-def parse(con, morph, str1, count=1, need_trace=False):
-    s = Sentence(con, morph, str1)
+def parse(con, morph_analyzer: pymorphy2.MorphAnalyzer, str1, count=1, need_trace=False):
+    s = Sentence(con, morph_analyzer, str1)
     res = None
     for i in range(count):
         print("------------------------------------------------------", i)
@@ -198,7 +198,7 @@ def parse(con, morph, str1, count=1, need_trace=False):
 def easy_parse(s, count=1):
     con = psycopg2.connect(dbname='gpatterns_3', user='postgres',
                            password='postgres', host='localhost')
-    morph = pymorphy2.MorphAnalyzer()
-    parse(con, morph, s, count, True)
+    morph_analyzer = pymorphy2.MorphAnalyzer()
+    parse(con, morph_analyzer, s, count, True)
 
 # print(a1)

@@ -276,15 +276,15 @@ def check_word(word):
     return True
 
 
-def insertPair(curPair, morph, con, cursor):
+def insertPair(curPair, morph_analyzer: pymorphy2.MorphAnalyzer, con, cursor):
     (main_word, mainNormalForm, mainFeat, dep_word,
      depNormalForm, depFeat, _, _) = curPair
     if (not check_word(main_word)) or (not check_word(dep_word)):
         return
     depFeat = depFeat.split()
     mainFeat = mainFeat.split()
-    depVariants = getParseByPymorphy(dep_word, depFeat, depNormalForm, morph.parse(dep_word))
-    mainVariants = getParseByPymorphy(main_word, mainFeat, mainNormalForm, morph.parse(main_word))
+    depVariants = getParseByPymorphy(dep_word, depFeat, depNormalForm, morph_analyzer.parse(dep_word))
+    mainVariants = getParseByPymorphy(main_word, mainFeat, mainNormalForm, morph_analyzer.parse(main_word))
     if depVariants == [] or mainVariants == []:
         return
     depVariants = deleteCPIFromList(depVariants)
@@ -296,7 +296,7 @@ def insertPair(curPair, morph, con, cursor):
 
 if __name__ == '__main__':
     # 610944- последняя сделанная
-    morph = pymorphy2.MorphAnalyzer()
+    morph_analyzer = pymorphy2.MorphAnalyzer()
     con = psycopg2.connect(dbname='gpatterns', user='postgres',
                            password='postgres', host='localhost')
     with open('pairsList.pickle', 'rb') as f:
@@ -305,5 +305,5 @@ if __name__ == '__main__':
         print(i)
         curPair = pairsList[i]
         cursor = con.cursor()
-        insertPair(curPair, morph, con, cursor)
+        insertPair(curPair, morph_analyzer, con, cursor)
         cursor.close()
