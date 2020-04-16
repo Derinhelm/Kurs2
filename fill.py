@@ -1,11 +1,10 @@
-import copy
 import pickle
 
 import psycopg2
 import pymorphy2
 
 from dbFunctions import *
-from functions import *
+from word_module import WordForm
 
 corporaToImpMorph = {'V': 's_cl', 'NUM': 's_cl', 'PR': 's_cl', 'A': 's_cl',
                      'ADV': 's_cl', 'CONJ': 's_cl', 'S': 's_cl', 'PART': 's_cl',
@@ -22,6 +21,13 @@ corporaToImpMorph = {'V': 's_cl', 'NUM': 's_cl', 'PR': 's_cl', 'A': 's_cl',
                      'ПРОШ': 'tense', 'НАСТ': 'tense', 'НЕПРОШ': 'tense', 'ИНФ': 'tense',
                      'ИЗЪЯВ': 'tense', 'ПОВ': 'tense',
                      'СТРАД': 'voice'}
+
+
+class DBWordInfo:
+    def __init__(self, constraints_id, normal_form_id, prob):
+        self.constraints_id = constraints_id
+        self.normal_form_id = normal_form_id
+        self.probability = prob
 
 
 def parseCorporaTag(tagCorpora):
@@ -81,14 +87,14 @@ def parseCorporaTag(tagCorpora):
         elif cur_param == 'МЕСТН':
             checkFuns.append(lambda m: m.case_morph == 'prepositional')
         elif cur_param == 'ЗВ':
-            return [lambda m: False], None  # с звательным падежом пока не работаем
+            return None  # с звательным падежом пока не работаем
 
         elif cur_param == 'СРАВ':
             checkFuns.append(lambda m: m.s_cl == 'comparative')
         elif cur_param == 'КР':
             checkFuns.append(lambda m: m.s_cl == 'shortadjective' or m.s_cl == 'shortparticiple')
         elif cur_param == 'NID':
-            return [lambda m: False], None
+            return None
 
         elif cur_param == 'ЕД':
             checkFuns.append(lambda m: m.number == 'single')
@@ -97,6 +103,8 @@ def parseCorporaTag(tagCorpora):
 
         if cur_param not in ['СЛ', 'COM', 'СМЯГ', 'НЕСТАНД', 'МЕТА', 'НЕПРАВ']:
             impFeatures.add(corporaToImpMorph[cur_param])
+    if impFeatures == set():
+        return None # нет меток, рассматриваемого вида
     return checkFuns, impFeatures
 
 
@@ -122,11 +130,12 @@ def eqNormForm(s1, s2, parseS2):
 
 def getParseByPymorphy(curWord, curTagCorpora, curNormalForm, arrParse):
     """return list of pairs (morph, normal form)"""
-    (checkFuns, impFeatures) = parseCorporaTag(curTagCorpora)
-    if impFeatures is None:  # слово типа NID, 'as-sifr'
-        return []
+    res_parse = parseCorporaTag(curTagCorpora)
+    if res_parse is None:  # слово типа NID, 'as-sifr'
+        return None
+    (checkFuns, impFeatures) = res_parse
     # print(curWord, curTagCorpora, curNormalForm, arrParse)
-    notImpFeat = set(copy.copy(Morph.names)) - impFeatures
+    notImpFeat = set(Morph.names) - impFeatures
     goodParsePymorphy = []
     for cur_parse in arrParse:
         if eqNormForm(cur_parse.normal_form, curNormalForm, cur_parse) or \
@@ -136,48 +145,31 @@ def getParseByPymorphy(curWord, curTagCorpora, curNormalForm, arrParse):
             # для глаголов пока не требуем совпадения начальных форм
             m = Morph(cur_parse, curWord)
             nw = cur_parse.normal_form  # начальная форма слова
+            prob = cur_parse.score
             if m is not None:
                 flagTrueParse = True
                 for curCheckFun in checkFuns:
                     if not curCheckFun(m):
                         flagTrueParse = False
                         break
-                if flagTrueParse:
-                    for curField in notImpFeat:
-                        setattr(m, curField, 'not_imp')
+                if (flagTrueParse):
                     if m not in goodParsePymorphy:
-                        goodParsePymorphy += [(m, nw)]
-    # else:
-    # f.write(cur_parse.normal_form)
-    # f.write("\n")
-    # f.write(curNormalForm)
-    # f.write("\n")
-    # f.write("------------")
-    # f.write("\n")
-    return goodParsePymorphy
+                        word_form = WordForm(m, nw, prob)
+                        goodParsePymorphy += [word_form]
+    return (goodParsePymorphy, notImpFeat)
 
 
 def deleteCPIFromList(variantsList):
-    # не рассматриваем словосочетания с частицами, союзами и междометиями
-    # variantsList - [(морф, начальная форма)]
+    """удаляем словосочетания с частицами, союзами, междометиями звательным падежем"""
+    # variantsList - [WordForm]
     i = 0
     while i < len(variantsList):
-        if variantsList[i][0].s_cl in ['conjunction', 'particle', 'interjection']:
+        if variantsList[i].morph.s_cl in ['conjunction', 'particle', 'interjection'] or \
+                variantsList[i].morph.case_morph == 'vocative':
             variantsList.pop(i)
         else:
             i += 1
     return variantsList
-
-
-def getNumberFromDB(variantsList, con, cursor):
-    # variantsList - список вида (морф, начальная форма)
-    numbersList = []  # список вида (номер морфа, номер начальной формы)
-    for curVariant in variantsList:
-        (morph, normalForm) = curVariant
-        morphNumber = str(findOrInsertMorph(con, morph, cursor))  # номер морфа в базе
-        normalFormNumber = str(findOrInsertWord(con, normalForm, cursor))  # номер начальной формы в базе
-        numbersList.append((morphNumber, normalFormNumber, morph.probability))
-    return numbersList
 
 
 def insertPattern3(con, cursor, mainMorphNumber, depMorphNumber,
@@ -254,17 +246,16 @@ def insertAllPairs(con, cursor, mainInserts, depInserts):
     denominator = 0
     for cur_main in mainInserts:
         for cur_dep in depInserts:
-            denominator += cur_main[2] * cur_dep[2]
+            denominator += cur_main.probability * cur_dep.probability
     for cur_main in mainInserts:
         for cur_dep in depInserts:
-            mainMorphNumber = cur_main[0]
-            mainNormalFormNumber = cur_main[1]
-            depMorphNumber = cur_dep[0]
-            depNormalFormNumber = cur_dep[1]
-            mark = cur_main[2] * cur_dep[2] / denominator
+            mainMorphNumber = cur_main.constraints_id
+            mainNormalFormNumber = cur_main.normal_form_id
+            depMorphNumber = cur_dep.constraints_id
+            depNormalFormNumber = cur_dep.normal_form_id
+            mark = cur_main.probability * cur_dep.probability / denominator
             insertPattern(con, cursor, mainMorphNumber, mainNormalFormNumber,
                           depMorphNumber, depNormalFormNumber, mark)
-
 
 def check_word(word):
     if word is None:
@@ -276,6 +267,30 @@ def check_word(word):
     return True
 
 
+def create_constraints(variant, not_imp):
+    variant_constraints_list = []
+    for attr in Morph.names:
+        if attr not in not_imp:
+            val = getattr(variant.morph, attr)
+            if val[-4:] != "_any":
+                variant_constraints_list.append((attr, val))
+
+    return variant_constraints_list
+
+
+def create_db_numbers(variants, not_imp):
+    """variant(WordForm) to list of constraints - [(номер ограничения в базе,номер слова)]"""
+    constraints_list = []
+    for variant in variants:
+        cons_list = create_constraints(variant, not_imp)
+        cons_id = findOrInsertMorphConstraints(cons_list, con, cursor)
+        normal_form_id = findOrInsertWord(variant.normal_form, con, cursor)
+
+        # ограничение на нач.форму слова(2 и 3 уровень)
+        constraints_list.append(DBWordInfo(cons_id, normal_form_id, variant.probability))
+    return constraints_list
+
+
 def insertPair(curPair, morph_analyzer: pymorphy2.MorphAnalyzer, con, cursor):
     (main_word, mainNormalForm, mainFeat, dep_word,
      depNormalForm, depFeat, _, _) = curPair
@@ -283,25 +298,34 @@ def insertPair(curPair, morph_analyzer: pymorphy2.MorphAnalyzer, con, cursor):
         return
     depFeat = depFeat.split()
     mainFeat = mainFeat.split()
-    depVariants = getParseByPymorphy(dep_word, depFeat, depNormalForm, morph_analyzer.parse(dep_word))
-    mainVariants = getParseByPymorphy(main_word, mainFeat, mainNormalForm, morph_analyzer.parse(main_word))
-    if depVariants == [] or mainVariants == []:
+    dep_res = getParseByPymorphy(dep_word, depFeat, depNormalForm, morph_analyzer.parse(dep_word))
+    if dep_res is None:
         return
+    (depVariants, dep_not_imp) = dep_res
+    main_res = getParseByPymorphy(main_word, mainFeat, mainNormalForm,
+                                                      morph_analyzer.parse(main_word))
+    if main_res is None:
+        return
+    (mainVariants, main_not_imp) = main_res
     depVariants = deleteCPIFromList(depVariants)
     mainVariants = deleteCPIFromList(mainVariants)
-    depVariantsNumbers = getNumberFromDB(depVariants, con, cursor)
-    mainVariantsNumbers = getNumberFromDB(mainVariants, con, cursor)
-    insertAllPairs(con, cursor, mainVariantsNumbers, depVariantsNumbers)
+    if depVariants == [] or mainVariants == []:
+        return
+    dep_constraints_numbers = create_db_numbers(depVariants, dep_not_imp)
+    main_constraints_numbers = create_db_numbers(mainVariants, main_not_imp)
+
+    insertAllPairs(con, cursor, main_constraints_numbers, dep_constraints_numbers)
 
 
 if __name__ == '__main__':
-    # 610944- последняя сделанная
+    # 610944- последняя сделанная в gpatterns_4 610945 - voct
+    # 898384 - последняя в gpatterns
     morph_analyzer = pymorphy2.MorphAnalyzer()
     con = psycopg2.connect(dbname='gpatterns', user='postgres',
                            password='postgres', host='localhost')
     with open('pairsList.pickle', 'rb') as f:
         pairsList = pickle.load(f)
-    for i in range(407785, len(pairsList)):
+    for i in range(497413, len(pairsList)):
         print(i)
         curPair = pairsList[i]
         cursor = con.cursor()

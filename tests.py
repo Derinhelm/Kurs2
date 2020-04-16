@@ -4,9 +4,6 @@ import pymorphy2
 from main import parse
 
 if __name__ == '__main__':
-    con = psycopg2.connect(dbname='gpatterns_3', user='postgres',
-                           password='postgres', host='localhost')
-    morph_analyzer = pymorphy2.MorphAnalyzer()
 
     # str1 = "Идете домой с братом." Жуть
     # str1 = "Идите с братом домой."
@@ -39,7 +36,7 @@ if __name__ == '__main__':
     # str1 = "Генерал зажмурился, бессильно сжав кулаки."
     # str1 = "Есть яблоки"
     # str1 = "От подножия лестницы начинался освещенный факелами коридор."
-    a1 = parse(con, morph_analyzer, str1, 1, True)
+    a1 = parse(str1, 1, True)
     for i in a1:
         print(i)
 
@@ -78,16 +75,7 @@ if __name__ == '__main__':
     '''
     '''a1 = parse(con, "Ходить на работу.")
     a1 =  parse(con, "Маленький мальчик хочет спать.",  True)
-    s = Sentence()
-    str1 = "Взрослые люди ходят на работу."
-    s.setString(str1)
-    s.morph_parse()
-    s.getGPatterns(con)
-    res = s.sint_parse()
-    res.visualizate(s.first_parse_words_indices)
-    for i in range(10):
-        res1 = s.sint_parse()
-        res1.visualizate(s.first_parse_words_indices)
+
     a1 = parse(con, "Маленький мальчик хочет спать.")
     a1 = parse(con, "Каждый час имеет свое чудо.", True)
     a1 = parse(con, "Памятник себе воздвиг нерукотворный.", True)

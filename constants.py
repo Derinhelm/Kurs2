@@ -1,3 +1,4 @@
+NUMBER_MORPH_PARAMETRS = 14
 prep_type_dict = {'без': 'g', 'безо': 'g', 'благодаря': 'd', 'близ': 'g', 'в': 'ap', 'вблизи': 'g', 'ввиду': 'g',
                   'вглубь': 'g', 'вдоль': 'g', 'взамен': 'g', 'включая': 'a', 'выключая': 'a', 'вкось': 'g',
                   'вкруг': 'g', 'вместо': 'g', 'вне': 'g', 'внизу': 'g', 'внутри': 'g', 'внутрь': 'g', 'во': 'ap',
@@ -58,7 +59,7 @@ numb = {'sing': 'single', 'plur': 'plural', 'None': 'number_any'}
 # Fixd неизменяемое !!!!!
 cas = {'nomn': 'nominative', 'gent': 'genitive', 'datv': 'dative',
        'accs': 'accusative', 'ablt': 'instrumental', 'loct': 'prepositional',
-       'None': 'case_any', 'loc2': 'prepositional', 'gen2': 'genitive'}
+       'None': 'case_any', 'loc2': 'prepositional', 'gen2': 'genitive', 'voct': 'vocative'}
 
 st = {True: 'true', False: 'false'}
 # нет

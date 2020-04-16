@@ -1,3 +1,4 @@
+from word_module import Morph
 def dbInsertWord(con, w, cursor):
     # возвращает индекс, вставленного слова
     cursor.execute('INSERT INTO word VALUES(DEFAULT,%s) RETURNING id;', (w,))
@@ -8,11 +9,13 @@ def dbInsertWord(con, w, cursor):
 
 def dbInsertMorph(con, m, cursor):
     # возвращает индекс, вставленного морфа
-    command = 'INSERT INTO morph_constraints' \
-              ' VALUES(DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;'
-    params = (m.s_cl, m.animate, m.gender, m.number,
-              m.case_morph, m.reflection, m.perfective, m.transitive,
-              m.person, m.tense, m.voice, m.degree, m.static, m.prep_type)
+    command = "INSERT INTO morph_constraints("
+    param_list = []
+    for (attr, val) in m:
+        command += attr + ", "
+        param_list.append(val)
+    command = command[:-2] + ") VALUES(" + ("%s, " * len(param_list))[:-2] + ") RETURNING id;"
+    params = tuple(param_list)
     cursor.execute(command, params)
     con.commit()
     ind = cursor.fetchall()
@@ -21,24 +24,17 @@ def dbInsertMorph(con, m, cursor):
 
 def dbFindMorph(con, m, cursor):
     # здесь ответ - одно индекс !! Морфы все должны быть различны!!
-    command = "SELECT id FROM morph_constraints WHERE " + \
-              "s_cl = %s AND " + \
-              "animate = %s AND " + \
-              "gender = %s AND " + \
-              "number = %s AND " + \
-              "case_morph = %s AND " + \
-              "reflection = %s AND " + \
-              "perfective = %s AND " + \
-              "transitive = %s AND " + \
-              "person = %s AND " + \
-              "tense = %s AND " + \
-              "voice = %s AND " + \
-              "degree = %s AND " + \
-              "static = %s AND " \
-              "prep_type = %s;"
-    params = (m.s_cl, m.animate, m.gender, m.number,
-              m.case_morph, m.reflection, m.perfective, m.transitive,
-              m.person, m.tense, m.voice, m.degree, m.static, m.prep_type)
+    command = "SELECT id FROM morph_constraints WHERE "
+    param_list = []
+    imp_attr = []
+    for (attr, val) in m:
+        command += attr + " = %s AND "
+        param_list.append(val)
+        imp_attr.append(attr)
+    for attr in set(Morph.names) - set(imp_attr):
+        command += attr + " = 'not_imp' AND "
+    command = command[:-5] + ";"
+    params = tuple(param_list)
     cursor.execute(command, params)
     ans = []
     for row in cursor:
@@ -65,7 +61,7 @@ def dbFindWord(con, w, cursor):
     return ans[0]
 
 
-def findOrInsertMorph(con, m, cursor):
+def findOrInsertMorphConstraints(m, con, cursor):
     res = dbFindMorph(con, m, cursor)
     if res:
         return res
@@ -73,7 +69,7 @@ def findOrInsertMorph(con, m, cursor):
     return res
 
 
-def findOrInsertWord(con, m, cursor):
+def findOrInsertWord(m, con, cursor):
     res = dbFindWord(con, m, cursor)
     if res:
         return res

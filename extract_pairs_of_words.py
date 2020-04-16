@@ -44,9 +44,9 @@ def insert(nameFile, textTitle, pairsList):
         curSentence = arrayParseSentences[sentenceNumber]
         for curWord in curSentence:
             if curWord.dom != '_root':
-                mainWord = curSentence[int(curWord.dom) - 1]
-                newPair = (mainWord.word, mainWord.normalForm, mainWord.feat, curWord.word,
-                           curWord.normalForm, curWord.feat, textTitle, sentenceNumber + 1)
+                main_word = curSentence[int(curWord.dom) - 1]
+                newPair = (main_word.word, main_word.normalForm, main_word.feat, curWord.word,
+                                               curWord.normalForm, curWord.feat, textTitle, sentenceNumber + 1)
                 pairsList.append(newPair)
 
 

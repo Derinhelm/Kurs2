@@ -1,6 +1,7 @@
-from constants import *
+import pymorphy2
 
-NUMBER_PARAMETRS = 14
+from constants import *
+from functions import get_patterns
 
 
 class Morph:  # для хранения морфологических характеристик
@@ -80,7 +81,6 @@ class Morph:  # для хранения морфологических хара�
         return "prep_type_any"
 
     def __init__(self, cur_parse, text):
-        self.probability = cur_parse.score  # вероятность разбора из pymorphy2
         self.s_cl = self.create_s_cl(cur_parse)
         self.animate = anim[str(cur_parse.tag.animacy)]
         self.gender = self.create_gender(cur_parse)
@@ -134,33 +134,54 @@ class Morph:  # для хранения морфологических хара�
         return True
 
 
-class GPattern:
-    def __init__(self, level, mw, dw, mark, mc, dc):
-        self.level = level
-        self.main_word = mw
-        self.dependentWord = dw
-        self.mark = mark
-        self.main_wordConstraints = mc  # массив ограничений на морф
-        self.dependentWordConstraints = dc  # массив ограничений на морф
+class WordForm:
+    def __init__(self, morph: Morph, normal_form, prob):
+        self.normal_form = normal_form
+        self.morph: Morph = morph
+        self.g_patterns = []  # список из Gpattern, в которых данная словоформа мб главной
+        self.probability = prob  # вероятность разбора из pymorphy2
 
     def __repr__(self):
-        s = str(self.level) + ":"
-        if self.level == 3:
-            s += " " + self.dependentWord
-        s += " " + str(self.mark) + " "
-        for c in self.dependentWordConstraints:
-            s += " " + c + ";"
-        return s
+        return self.normal_form + " " + self.morph.__repr__()
 
-    def __lt__(self, other):  # x < y
-        if self.level < other.level:
-            return True
-        if self.level > other.level:
-            return False
-        return self.mark < other.mark
+    def create_patterns(self, con):
+        cursor = con.cursor()
+        morph_constr = self.morph.get_imp()
+        cur_first = get_patterns(cursor, 1, main_morph_params=morph_constr)
+        cur_sec = get_patterns(cursor, 2, main_morph_params=morph_constr, main_word_param=self.normal_form)
+        cur_third = get_patterns(cursor, 3, main_morph_params=morph_constr, main_word_param=self.normal_form)
+        cursor.close()
+        self.g_patterns += cur_third
+        self.g_patterns += cur_sec
+        self.g_patterns += cur_first
+        return
 
-    def get_dep_morph_constraints(self):
-        return self.dependentWordConstraints
+    def get_patterns(self):
+        return self.g_patterns
 
-    def get_dep_word(self):
-        return self.dependentWord
+
+class Word:
+    def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text):
+        self.word_text = word_text
+        self.forms = []
+        self.morph_parse(con, morph_analyzer)
+
+    def morph_parse(self, con, morph_analyzer: pymorphy2.MorphAnalyzer):
+        if self.word_text[-1] == '.':
+            p = morph_analyzer.parse(self.word_text[:-1])
+            abbr = True
+        else:
+            p = morph_analyzer.parse(self.word_text)
+            abbr = False
+        for cur_parse in p:
+            if (abbr and 'Abbr' in cur_parse.tag) or \
+                    (not abbr and 'Abbr' not in cur_parse.tag):
+                # чтобы предлогу "к" не приписывался вариант кандидат
+                morph = Morph(cur_parse, self.word_text)
+                cur_form = WordForm(morph, cur_parse.normal_form, cur_parse.score)
+                cur_form.create_patterns(con)
+                self.forms.append(cur_form)
+        return
+
+    def get_all_form_patterns(self):
+        return [form.g_patterns for form in self.forms]

@@ -1,1 +1,37 @@
 .idea/
+*.pickle
+write*
+.ipynb_checkpoints/
+1
+Algoritm.tgt
+Demo-trace.ipynb
+Demonstration_old.ipynb
+Prob_old.tgt
+Selector_old.ipynb
+Tselina.tgt
+Untitled.ipynb
+__pycache__/
+all/
+bin/
+chern/
+conda-meta/
+corpora.zip
+g_patterns_v1.sql
+include/
+lib/
+man/
+mini.tgt
+mismatch_of_the_initial_form
+mismatch_of_the_initial_form-254
+mismatch_of_the_initial_form-255
+prep and prepositional case.ipynb
+share/
+ssl/
+text.txt
+wrong_case
+wrong_nominative
+wrong_phrase
+x86_64-conda_cos6-linux-gnu/
+"\320\237\321\200\320\265\320\264\320\273\320\276\320\263\320\270 \321\200\321\203\321\201\321\201\320\272\320\276\320\263\320\276 \321\217\320\267\321\213\320\272\320\260.docx"
+"\320\242\321\200\320\260\321\201\321\201\321\213/"
+

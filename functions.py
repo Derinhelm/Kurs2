@@ -1,6 +1,7 @@
 import pandas as pd
 
-from const_types import *
+from constants import dict_field, NUMBER_MORPH_PARAMETRS
+from patterns import GPattern
 
 
 def create_command(level, where_str):
@@ -141,10 +142,10 @@ def get_patterns(cursor, level, main_morph_params=None, dep_morph_params=None, m
     for pattern in res:
         main_constr = []
         dep_constr = []
-        for i in range(3, NUMBER_PARAMETRS + 3):
+        for i in range(3, NUMBER_MORPH_PARAMETRS + 3):
             if pattern[i] != 'not_imp':
                 main_constr.append(pattern[i])
-        for i in range(3 + NUMBER_PARAMETRS, 3 + 2 * NUMBER_PARAMETRS):
+        for i in range(3 + NUMBER_MORPH_PARAMETRS, 3 + 2 * NUMBER_MORPH_PARAMETRS):
             if pattern[i] != 'not_imp':
                 dep_constr.append(pattern[i])
         new_pattern = GPattern(level, pattern[0], pattern[1], pattern[2],
