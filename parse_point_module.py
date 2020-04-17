@@ -19,6 +19,11 @@ class WordInSentence:
         self.used_gp = []  # типа Gp
         self.number_in_sentence = number
 
+    def __repr__(self):
+        if self.parsed:
+            return self.get_morph().__repr__()
+        return "not_parsed"
+
     def fix_morph_variant(self, variant_position: int):
         """слово становится разобранным"""
         self.parsed = True
@@ -116,76 +121,73 @@ class ParsePoint:
     def check_is_word_in_dependent_group(self, number_main, number_dep):
         return True  # toDo ПЕРЕПИСАТЬ!!!!!
 
-    def apply(self, main_pp_word_pos: int, depending_pp_word_pos: int, dep_variant: int, g_pattern_to_apply,
-              max_number_point):
-        """create and return new child ParsePoint"""
+    def copy(self):
+        """create copy of ParsePoint"""
+        # надо писать вручную из-за attempts.copy
+        # count_parsed_words, number_point - числа
         new_parse_point = copy.copy(self)
-
         new_parse_point.parse_point_word_list = copy.deepcopy(
-            self.parse_point_word_list)  # toDo self или new_parse_point
-        new_parse_point.parse_point_word_list[depending_pp_word_pos].fix_morph_variant(dep_variant)
-        new_parse_point.parse_point_word_list[main_pp_word_pos].add_gp(g_pattern_to_apply,
-                                                                       new_parse_point.parse_point_word_list[
-                                                                           depending_pp_word_pos])
-
-        new_parse_point.child_parse_point = []
-        new_parse_point.count_parsed_words += 1
-        new_parse_point.parsed = copy.deepcopy(self.parsed)  # toDo self или new_parse_point
-        new_parse_point.parsed.append((main_pp_word_pos, depending_pp_word_pos))
-
-        new_parse_point.number_point = max_number_point + 1
-        new_parse_point.attempts = copy.deepcopy(self.attempts)
-        new_parse_point.attempts = new_parse_point.attempts.create_child()  # toDo self или new_parse_point
-
-        dep_word = new_parse_point.parse_point_word_list[depending_pp_word_pos]
-        main_word = new_parse_point.parse_point_word_list[main_pp_word_pos]
-        new_parse_point.view = self.view.create_child_view(new_parse_point.__repr__(), main_word, dep_word)
+            self.parse_point_word_list)
+        new_parse_point.child_parse_point = copy.deepcopy(
+            self.child_parse_point)
+        new_parse_point.parsed = copy.deepcopy(self.parsed)
+        new_parse_point.attempts = self.attempts.copy()
+        new_parse_point.view = copy.deepcopy(self.view)
         return new_parse_point
 
     def create_firsts_pp(self, main_pos, main_var, max_number_point):
-        new_parse_point = copy.copy(self)
-
-        new_parse_point.parse_point_word_list = copy.deepcopy(
-            self.parse_point_word_list)  # toDo self или new_parse_point
+        new_parse_point = self.copy()
         new_parse_point.parse_point_word_list[main_pos].fix_morph_variant(main_var)
 
         new_parse_point.child_parse_point = []
         new_parse_point.count_parsed_words += 1
-        new_parse_point.parsed = copy.deepcopy(self.parsed)  # toDo self или new_parse_point
-
         new_parse_point.number_point = max_number_point + 1
-        new_parse_point.attempts = self.attempts.create_first(main_pos, main_var)  # toDo написать
+        new_parse_point.attempts.create_first(main_pos, main_var)
 
         main_word = new_parse_point.parse_point_word_list[main_pos]
         new_parse_point.view = self.view.create_child_view(new_parse_point.__repr__(), main_word)
         return new_parse_point
 
     def find_first_word(self, fun):
-        number_child_point = self.number_point + 1
+        max_number_point = self.number_point
         list_new_parse_points = []
         for word_position in range(len(self.parse_point_word_list)):
             cur_point_word = self.parse_point_word_list[word_position]
             for variant_number in range(len(cur_point_word.word.forms)):
                 cur_morph = cur_point_word.word.forms[variant_number].morph
                 if fun(cur_morph):
-                    new_parse_point = self.create_firsts_pp(word_position, variant_number, number_child_point)
-                    number_child_point += 1
+                    new_parse_point = self.create_firsts_pp(word_position, variant_number, max_number_point)
+                    max_number_point += 1
                     list_new_parse_points.append(new_parse_point)
         return list_new_parse_points
 
     # вызывается в Sentence
-    def get_new_parse_point(self, max_number_point):
-        """create new ParsePoint, child for self"""
+    def create_child_parse_point(self, max_number_point):
+        """create and return new child ParsePoint"""
         print("------")
         att_res = self.attempts.next()
-        # print(ans)
         if att_res is None:
             return None
-        (pot_main, pot_pattern, pot_dep, pot_dep_parse_variant) = att_res
-        dep_word = self.parse_point_word_list[pot_dep].word
-        new_parse_point = self.apply(pot_main, pot_dep, pot_dep_parse_variant, pot_pattern, max_number_point)
+        (main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant) = att_res
+
+        new_parse_point = self.copy()
+
+        new_parse_point.parse_point_word_list[depending_pp_word_pos].fix_morph_variant(dep_variant)
+        new_parse_point.parse_point_word_list[main_pp_word_pos].add_gp(g_pattern_to_apply,
+                                        new_parse_point.parse_point_word_list[depending_pp_word_pos])
+
+        new_parse_point.child_parse_point = []
+        new_parse_point.count_parsed_words += 1
+        new_parse_point.parsed.append((main_pp_word_pos, depending_pp_word_pos))
+
+        new_parse_point.number_point = max_number_point + 1
+        new_parse_point.attempts.create_child()
+
+        dep_word = new_parse_point.parse_point_word_list[depending_pp_word_pos]
+        main_word = new_parse_point.parse_point_word_list[main_pp_word_pos]
+        new_parse_point.view = self.view.create_child_view(new_parse_point.__repr__(), main_word, dep_word)
         self.child_parse_point.append(new_parse_point)
-        return new_parse_point, pot_pattern
+        return new_parse_point, g_pattern_to_apply
 
     def check_end_parse(self):
         """check that all words in this ParsePoint are parsed"""

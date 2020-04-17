@@ -90,7 +90,7 @@ class Sentence:
 
         while True:
             best_parse_point = self.get_best_parse_point()
-            res = best_parse_point.get_new_parse_point(self.max_number_parse_point)
+            res = best_parse_point.create_child_parse_point(self.max_number_parse_point)
             # print(res)
             if res is None:
                 print("Не разобрано!")

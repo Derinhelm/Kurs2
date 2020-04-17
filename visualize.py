@@ -70,6 +70,7 @@ class ParsePointView:
                 verticalalignment='top', font_size=20)
         plt.title(self.title)
         plt.show()
+        return fig
 
     def on_mouse_click_parse_point(self, event, pos):
         if event.dblclick:
@@ -154,3 +155,4 @@ class ParsePointTreeView:
                                      rotate=False)
         plt.title(self.title)
         plt.show()
+        return fig

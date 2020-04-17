@@ -176,6 +176,7 @@ class DepWords:
         self.flag_end = True
         return None
 
+
 class Attempts:
     def __init__(self, word_variants_list, all_patterns_list_param, morph_position_dict,
                  word_position_dict):
@@ -194,9 +195,6 @@ class Attempts:
         self.current_main_pattern_index = None  # индекс текущей пары главное + модель в main_pattern_list
         self.dep_dict = {}  # по главному + модели возвращается DepWords
         self.flag_end = False
-
-
-
 
     def next(self):
         if self.current_dep is not None:
@@ -261,49 +259,46 @@ class Attempts:
         new_att.unavailable = copy.deepcopy(self.unavailable)
         new_att.dep_dict = copy.deepcopy(self.dep_dict)
         new_att.word_variants_list = copy.deepcopy(self.word_variants_list)
-        new_att.main_pattern_list  = copy.deepcopy(self.main_pattern_list)
+        new_att.main_pattern_list = copy.deepcopy(self.main_pattern_list)
         new_att.current_dep = copy.deepcopy(self.current_dep)
         return new_att
 
     def create_first(self, main_pos, main_var):
-        new_att = self.copy()
-        patterns_main_word = self.all_patterns_list[main_pos][main_var] #toDo правильно ??
-        new_att.main_pattern_list = [(main_pos, pattern) for pattern in patterns_main_word]
+        """"""
+        patterns_main_word = self.all_patterns_list[main_pos][main_var]  # toDo правильно ??
+        self.main_pattern_list = [(main_pos, pattern) for pattern in patterns_main_word]
 
-        new_att.delete_variants_of_new_parsed(main_pos)
+        self.delete_variants_of_new_parsed(main_pos)
         # здесь пока не валидны current_main, current_pattern, тк мб этот Attempts никогда не будет вычислен
-        new_att.current_main = None
-        new_att.current_pattern = None
-        new_att.current_dep = None
-        new_att.current_main_pattern_index = None  # индекс текущей пары главное + модель в main_pattern_list
-        new_att.flag_end = False
-
-        return new_att
+        self.current_main = None
+        self.current_pattern = None
+        self.current_dep = None
+        self.current_main_pattern_index = None  # индекс текущей пары главное + модель в main_pattern_list
+        self.flag_end = False
 
     def create_child(self):
         """создаем новую структуру, дочернюю данной(в ней применена текущая модель управления)"""
-        #current_dep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым"
-        new_attempts = self.copy()
-        new_parsed = new_attempts.current_dep.cur_dep[0]
-        new_attempts.add_new_main_patterns(new_attempts.current_dep.cur_dep)
+        # current_dep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым"
+        new_parsed = self.current_dep.cur_dep[0]
+        self.add_new_main_patterns(self.current_dep.cur_dep)
         deleted_keys = []
-        for key in new_attempts.dep_dict.keys():
-            del_res = new_attempts.dep_dict[key].delete_from_two_part(new_parsed)
+        for key in self.dep_dict.keys():
+            del_res = self.dep_dict[key].delete_from_two_part(new_parsed)
             # None возвращается, если запустили delete_in_cur_half, и она вернула None(те пот.зависимые закончились)
             # те для данной пары key = (главное, модель) в новой точке разбора нет зависимых,
             # те ее надо удалить из словаря и из списка
             if del_res is None:
                 deleted_keys.append(key)
-                new_attempts.main_pattern_list.remove(key)
+                self.main_pattern_list.remove(key)
         for del_key in deleted_keys:
-            new_attempts.dep_dict.pop(del_key)
-        new_attempts.delete_variants_of_new_parsed(new_parsed)
-        del_res = new_attempts.current_dep.delete_in_cur_half(new_parsed)
+            self.dep_dict.pop(del_key)
+        self.delete_variants_of_new_parsed(new_parsed)
+        del_res = self.current_dep.delete_in_cur_half(new_parsed)
         if del_res is not None:
             # для данной пары (главное, модель) еще могут быть зависимые(например, в случае однородности),
             # сохраняем информацию о зависимых
-            new_attempts.dep_dict[(new_attempts.current_main, new_attempts.current_pattern)] = new_attempts.current_dep
-        new_attempts.current_dep = None
+            self.dep_dict[(self.current_main, self.current_pattern)] = self.current_dep
+        self.current_dep = None
 
     def create_dep(self, pattern, main_index):
         morph_constraints = pattern.get_dep_morph_constraints()
