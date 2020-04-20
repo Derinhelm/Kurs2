@@ -1,5 +1,5 @@
 
-from sentence_module import Sentence
+from parse_point_module import Sentence
 import copy
 
 def parse(str1, count = 1):

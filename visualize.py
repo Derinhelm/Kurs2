@@ -51,6 +51,37 @@ class ParsePointView:
             child.change_word_view(dep_word.number_in_sentence, dep_word.get_form().__repr__())
         return child
 
+    def easy_visualize(self):
+        global number_windows
+        number_windows += 1
+        fig = plt.figure(number_windows)
+        pos = graphviz_layout(self.graph, prog='dot')
+        x_values, y_values = zip(*pos.values())
+        x_max = max(x_values)
+        x_min = min(x_values)
+        x_margin = (x_max - x_min) * 0.25
+        plt.xlim(x_min - x_margin, x_max + x_margin)
+        y_max = max(y_values)
+        y_min = min(y_values)
+        y_margin = (y_max - y_min) * 0.25
+        plt.ylim(y_min - y_margin, y_max + y_margin)
+        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
+                verticalalignment='top', font_size=20)
+        plt.title(self.title)
+
+        # w1, h1 = fig.canvas.get_width_height()
+        # buf = numpy.fromstring(fig.canvas.tostring_argb(), dtype=numpy.uint8)
+        # buf.shape = (w1, h1, 4)
+
+        # canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+        # buf = numpy.roll(buf, 3, axis=2)
+        # w, h, d = buf.shape
+        # return Image.fromstring("RGBA", (w, h), buf.tostring())
+        t = '_' + str(number_windows)
+        plt.savefig(t)
+        plt.close()
+        return t
+
     def visualize(self):
         global number_windows
         number_windows += 1
@@ -69,8 +100,8 @@ class ParsePointView:
         nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
                 verticalalignment='top', font_size=20)
         plt.title(self.title)
+        fig.canvas.draw_idle()
         plt.show()
-        return fig
 
     def on_mouse_click_parse_point(self, event, pos):
         if event.dblclick:
@@ -155,4 +186,3 @@ class ParsePointTreeView:
                                      rotate=False)
         plt.title(self.title)
         plt.show()
-        return fig
