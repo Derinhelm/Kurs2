@@ -9,8 +9,8 @@ def parse(str1, count = 1):
     for i in range(count):
         print("------------------------------------------------------", i)
         res = s.sint_parse()
+        if res is None:
+            break
         trace_view_copy = copy.deepcopy(s.view)
-        #res.view.visualize()
-        #trace_view_copy.visualize()
         ans.append((res.parse_point_word_list, res.view, trace_view_copy))
     return ans

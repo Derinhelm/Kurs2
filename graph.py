@@ -6,7 +6,7 @@ import os
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QLineEdit, QListWidget, QWidget, QHBoxLayout, QDesktopWidget, QHeaderView, QSlider,
                              QApplication, QLabel, QGridLayout, QVBoxLayout, QPushButton, QLineEdit, QTableWidget,
-                             QTableWidgetItem, QButtonGroup)
+                             QTableWidgetItem, QButtonGroup, QScrollArea)
 from PyQt5.QtGui import QPixmap
 from main import parse
 from parse_point_module import WordInSentence
@@ -80,35 +80,54 @@ class ResWindow(QWidget):
         self.tree_button = []
         for (t, point, tree) in self.res:
             number_column = 0
-            text_title = QLabel(str(t))
+            s = ""
+            for w in t:
+                s += str(w) + "\n"
+            text_title = QLabel(s)
+            text_title.setFixedWidth(400)
+            text_title.setWordWrap(True)
+            text_title.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Bold))
             grid.addWidget(text_title, number_res, number_column)
+
             number_column += 1
             t = point.easy_visualize()
             lbl = QLabel(self)
             lbl.setPixmap(QPixmap(t))
+            #lbl.setFixedWidth(500)
             grid.addWidget(lbl, number_res, number_column)
             #os.remove(t)
 
             number_column += 1
             self.point_button.append(QPushButton("Визуализировать точку разбора"))
             self.point_button[number_res].clicked.connect(lambda i: self.res[i][1].visualize(), number_res)
+            self.point_button[number_res].setFixedWidth(250)
             grid.addWidget(self.point_button[number_res], number_res, number_column)
 
             number_column += 1
             self.tree_button.append(QPushButton("Визуализировать дерево"))
             self.tree_button[number_res].clicked.connect(lambda i: self.res[i][2].visualize(), number_res)
+            self.tree_button[number_res].setFixedWidth(250)
 
             grid.addWidget(self.tree_button[number_res], number_res, number_column)
             number_res += 1
 
-        self.setLayout(grid)
+        widg = QWidget()
 
+        widg.setLayout(grid)
 
+        scroll = QScrollArea()
+        scroll.setWidget(widg)
+        scroll.setWidgetResizable(True)
+
+        box = QHBoxLayout()
+        box.addWidget(scroll)
+
+        self.setLayout(box)
 
 
         QApplication.desktop()
         # self.setGeometry(0, 0, e.height(), e.width())
-        self.setGeometry(444, 300, 800, 900)
+        self.setGeometry(444, 300, 1800, 900)
         self.setWindowTitle('Результаты')
 
         self.center()
@@ -119,12 +138,6 @@ class ResWindow(QWidget):
         cp = QDesktopWidget().availableGeometry().center()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
-
-    def point_vis(self, number):
-        point_view = self.res[number][1]
-        fig = point_view.visualize()
-        fig.canvas.draw_idle()
-        plt.show()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

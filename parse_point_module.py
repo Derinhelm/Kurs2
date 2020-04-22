@@ -24,7 +24,7 @@ class WordInSentence:
 
     def __repr__(self):
         if self.parsed:
-            return self.get_morph().__repr__()
+            return self.word.word_text + ": " + self.get_morph().__repr__()
         return "not_parsed"
 
     def fix_morph_variant(self, variant_position: int):
@@ -298,10 +298,9 @@ class Sentence:
         while True:
             best_parse_point = self.get_best_parse_point()
             res = best_parse_point.create_child_parse_point(self.max_number_parse_point)
-            # print(res)
             if res is None:
                 print("Не разобрано!")
-                return best_parse_point
+                return None
             else:
                 (new_point, pattern) = res
                 self.max_number_parse_point += 1

@@ -105,8 +105,8 @@ class Morph:  # для хранения морфологических хара�
         s = ""
         for curName in self.names:
             value = getattr(self, curName)
-            if value.count("_any") == 0:
-                s += value + ";"
+            if value.count("_any") == 0 and value != 'false':
+                s += value + "; "
         return s
 
     def __eq__(self, other):
