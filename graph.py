@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (QLineEdit, QListWidget, QWidget, QHBoxLayout, QDesk
                              QTableWidgetItem, QButtonGroup, QScrollArea)
 from PyQt5.QtGui import QPixmap
 from main import parse
+import functools
 from parse_point_module import WordInSentence
 from visualize import ParsePointView, ParsePointTreeView, ParsePointWordView
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -23,7 +24,6 @@ class BeginWindow(QWidget):
     def open_win(self):
         s = self.sentence.text()
         c = int(self.count.text())
-        parse(s,c)
         end = ResWindow(self, s, c)
         self.close()
         end.show()
@@ -99,13 +99,13 @@ class ResWindow(QWidget):
 
             number_column += 1
             self.point_button.append(QPushButton("Визуализировать точку разбора"))
-            self.point_button[number_res].clicked.connect(lambda i: self.res[i][1].visualize(), number_res)
+            self.point_button[number_res].clicked.connect(functools.partial(self.point_vis, number = number_res))
             self.point_button[number_res].setFixedWidth(250)
             grid.addWidget(self.point_button[number_res], number_res, number_column)
 
             number_column += 1
             self.tree_button.append(QPushButton("Визуализировать дерево"))
-            self.tree_button[number_res].clicked.connect(lambda i: self.res[i][2].visualize(), number_res)
+            self.tree_button[number_res].clicked.connect(functools.partial(self.tree_vis, number = number_res))
             self.tree_button[number_res].setFixedWidth(250)
 
             grid.addWidget(self.tree_button[number_res], number_res, number_column)
@@ -138,6 +138,12 @@ class ResWindow(QWidget):
         cp = QDesktopWidget().availableGeometry().center()
         qr.moveCenter(cp)
         self.move(qr.topLeft())
+
+    def point_vis(self, number):
+        self.res[number][1].visualize()
+
+    def tree_vis(self, number):
+        self.res[number][2].visualize()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

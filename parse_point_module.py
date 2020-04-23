@@ -62,7 +62,7 @@ class WordInSentence:
 class ParsePoint:
     direct_for_is_applicable = 1
 
-    def __init__(self, word_list, con, morph_analyzer):
+    def __init__(self, word_list, con, morph_analyzer, sent_title):
         self.parse_point_word_list = []
         for number in range(len(word_list)):
             word_text = word_list[number]
@@ -74,37 +74,10 @@ class ParsePoint:
         self.parsed = []
         self.number_point = 0
 
-        # список вида [[модели управления]],
-        # для каждого варианта разбора каждого слова храним его возможные модели управления
-        # j элементе i элемента all_patterns_list - список моделей управления для j варианта разбора i слова
-        # word - WordInSentence, надо перевызывать
-        all_patterns_list = [word.word.get_all_form_patterns() for word in self.parse_point_word_list]
 
-        word_variants_list = []  # список, в какой позиции, какой вариант мб
-        for i in range(len(self.parse_point_word_list)):
-            word_variants_list += [(i, j) for j in range(len(self.parse_point_word_list[i].word.forms))]
 
-        morph_position_dict = {}
-        # ключ - морф.характеристика, значение - set из пар (позиция слова, номер варианта разбора)
-
-        word_position_dict = {}
-        # ключ - нач.форма слова, значение - set из пар (позиция слова, номер варианта разбора)
-        for word_position in range(len(self.parse_point_word_list)):
-            word = self.parse_point_word_list[word_position].word
-            for form_position in range(len(word.forms)):
-                form = word.forms[form_position]
-                for cur_param in form.morph.get_imp():
-                    if cur_param not in morph_position_dict.keys():
-                        morph_position_dict[cur_param] = set()
-                    morph_position_dict[cur_param].add((word_position, form_position))
-
-                if form.normal_form not in word_position_dict.keys():
-                    word_position_dict[form.normal_form] = set()
-                word_position_dict[form.normal_form].add((word_position, form_position))
-
-        self.attempts = Attempts(word_variants_list, all_patterns_list,
-                                 morph_position_dict, word_position_dict)
-        self.view = ParsePointView('root', "Точка " + str(self.number_point), len(self.parse_point_word_list))
+        self.attempts = Attempts(self.parse_point_word_list)
+        self.view = ParsePointView('root', sent_title, len(self.parse_point_word_list))
 
     def __repr__(self):
         ans = str(self.number_point) + ":"
@@ -169,7 +142,6 @@ class ParsePoint:
                     list_new_parse_points.append(new_parse_point)
         return list_new_parse_points
 
-    # вызывается в Sentence
     def create_child_parse_point(self, max_number_point):
         """create and return new child ParsePoint"""
         print("------")
@@ -228,9 +200,10 @@ class Sentence:
         con = psycopg2.connect(dbname='gpatterns_3', user='postgres',
                                password='postgres', host='localhost')
         morph_analyzer = pymorphy2.MorphAnalyzer()
-        self.root_p_p = ParsePoint(word_list, con, morph_analyzer)
+        self.root_p_p = ParsePoint(word_list, con, morph_analyzer, self.input_str)
         self.view = ParsePointTreeView(self.input_str, self.root_p_p.view)
         self.create_first_parse_points()
+        con.close()
 
     def __repr__(self):
         return self.input_str
@@ -242,9 +215,6 @@ class Sentence:
         # дефис только в словах очень-очень и тп,
         punctuation = [' ', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
         cur_word = ""
-        morph_analyzer = pymorphy2.MorphAnalyzer()
-        con = psycopg2.connect(dbname='gpatterns_3', user='postgres',
-                               password='postgres', host='localhost')
         word_list = []
         for i in range(len(self.input_str)):
             cur_symbol = self.input_str[i]
@@ -258,7 +228,6 @@ class Sentence:
                 cur_word = cur_word + cur_symbol
         if len(cur_word) != 0:
             word_list.append(cur_word.lower())
-        con.close()
         return word_list
 
     def create_first_parse_points(self):
@@ -298,6 +267,7 @@ class Sentence:
         while True:
             best_parse_point = self.get_best_parse_point()
             res = best_parse_point.create_child_parse_point(self.max_number_parse_point)
+            print(res)
             if res is None:
                 print("Не разобрано!")
                 return None

@@ -13,7 +13,7 @@ class GPattern:
         s = str(self.level) + ":"
         if self.level == 3:
             s += " " + self.dependent_word
-        s += " " + str(self.mark) + " "
+        s += " " + str(round(self.mark)) + " "
         for c in self.dependent_word_constraints:
             s += " " + c + ";"
         return s
@@ -30,3 +30,18 @@ class GPattern:
 
     def get_dep_word(self):
         return self.dependent_word
+
+    def is_similar(self, other):
+        # модели разных уровней но с одинаковыми требованиями(мб какие-то требов. на главное/зависимое - None)
+        if self.main_word_constraints != other.main_word_constraints:
+            return False
+        if self.dependent_word_constraints != other.dependent_word_constraints:
+            return False
+
+        if self.main_word is not None and other.main_word is not None and self.main_word != other.main_word:
+            return False
+
+        if self.dependent_word is not None and other.dependent_word is not None and self.dependent_word != other.dependent_word:
+            return False
+
+        return True

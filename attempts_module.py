@@ -86,181 +86,234 @@ def find_best_pattern_in_list(param_list):
 
 
 class DepWords:
-    def __init__(self, dep, cur_main):
-        self.left_dep_words = copy.deepcopy(dep)
-        self.left_dep_words = list(filter(lambda x: x[0] < cur_main, self.left_dep_words))
-        self.right_dep_words = copy.deepcopy(dep)
-        self.right_dep_words = list(filter(lambda x: x[0] > cur_main, self.right_dep_words))
-        self.dep_direction = 1  # 1 - вправо, -1 - влево
-        self.dep_words = self.right_dep_words  # потом будет left_dep_words
-        self.flag_other_direction = False
-        self.point_cur_dep = 0
-        self.flag_end = False
-        if self.dep_words:
-            self.cur_dep = self.dep_words[self.point_cur_dep]
+    def __init__(self, dep_list, cur_main, len_sent):
+        self.dep_dict = {}
+        self.len_sent = len_sent #
+        for (word_pos, variant_number) in dep_list:
+            if word_pos in self.dep_dict.keys():
+                self.dep_dict[word_pos].append(variant_number)
+            else:
+                self.dep_dict[word_pos] = [variant_number]
+        for word_pos in self.dep_dict.keys():
+            self.dep_dict[word_pos].sort()
+        self.left_word_pos = cur_main
+        self.right_word_pos = cur_main
+        self.set_next_left()
+        self.set_next_right()
+        if self.right_word_pos is not None:
+            self.right_word = True
+            self.cur_word_pos = self.right_word_pos
         else:
-            self.cur_dep = None
-            self.change_direct()
+            self.right_word = False
+            self.cur_word_pos = self.left_word_pos
+        self.flag_dep_end = False
 
     def next_dep(self):
-        self.point_cur_dep += 1
-        if self.point_cur_dep != len(self.dep_words):
-            self.cur_dep = self.dep_words[self.point_cur_dep]
-            return self.dep_words[self.point_cur_dep]
-        return self.change_direct()
-
-    def change_dep_list(self, new_dep):
-        if self.dep_direction == 1:
-            self.right_dep_words = new_dep
-            self.dep_words = self.right_dep_words
-        else:
-            self.left_dep_words = new_dep
-            self.dep_words = self.left_dep_words
-
-    def delete_number_from_dep_list(self, delete_dep_number):
-        new_dep = list(filter(lambda x: x[0] != delete_dep_number, self.dep_words))
-        self.change_dep_list(new_dep)
-
-    def delete_in_cur_half(self, delete_dep_number):
-        # меняем dep_words, тк найденное зависимое слово было в dep_words, а не в другом направлении
-        while self.point_cur_dep != len(self.dep_words) and self.dep_words[self.point_cur_dep][0] == delete_dep_number:
-            self.point_cur_dep += 1
-        if self.point_cur_dep == len(self.dep_words):
-            self.delete_number_from_dep_list(delete_dep_number)
+        if self.flag_dep_end:
             return None
-        old_len = len(self.dep_words)
-        self.delete_number_from_dep_list(delete_dep_number)
-        count_del = old_len - len(self.dep_words)
-        self.point_cur_dep -= count_del
-        self.cur_dep = self.dep_words[self.point_cur_dep]
-        return self.cur_dep
+        ans_position = self.cur_word_pos
+        ans_variant = self.dep_dict[self.cur_word_pos].pop(0)
+        # вернули самый вероятный вариант из еще непросмотренных
+        if len(self.dep_dict[self.cur_word_pos]) == 0:
+            self.dep_dict.pop(self.cur_word_pos)
+            self.set_next_cur_word()
+        return (ans_position, ans_variant)
 
-        # указатель текущего зависимого надо поставить на следующее в dep_words значение
-        # , у которого первое поле != удаляемому
-
-    # варианты 1. delete_dep_number = 2 [(1, 0), (1, 1), (2, 0), (2, 1), (2, 2), (3, 0), (3, 1)],
-    # результат [(1, 0), (1, 1), (3, 0), (3, 1)] cur_dep = (3, 0)
-    # 2. delete_dep_number = 2 [(1, 0), (1, 1), (2, 0), (2, 1), (2, 2)],
-    # результат [(1, 0), (1, 1)], и надо менять направление
-    # если нельзя поменять направление, то переходим к следующей модели(или к следующему главному)
-
-    def delete_from_two_part(self, delete_dep_number):
-        left_part = list(filter(lambda x: x[0] == delete_dep_number, self.left_dep_words))
-        if left_part:
-            # удаляемое в левой половине
-            if self.dep_direction == -1:
-                # левая часть - текущая
-                self.delete_in_cur_half(delete_dep_number)
+    def set_next_cur_word(self):
+        if self.right_word:
+            #рассматривали слово справа
+            self.set_next_right()
+            if self.left_word_pos is not None:
+                self.cur_word_pos = self.left_word_pos
+                self.right_word = False
             else:
-                self.left_dep_words = list(filter(lambda x: x[0] != delete_dep_number, self.left_dep_words))
-                return self.left_dep_words
+                if self.right_word_pos is not None:
+                    self.cur_word_pos = self.right_word_pos
+                    self.right_word = True
+                else:
+                    self.flag_dep_end = True
         else:
-            # удаляемое в правой половине
-            if self.dep_direction == 1:
-                # правая - текущая
-                self.delete_in_cur_half(delete_dep_number)
+            #рассматривали слово слева
+            self.set_next_left()
+            if self.right_word_pos is not None:
+                self.cur_word_pos = self.right_word_pos
+                self.right_word = True
             else:
-                self.right_dep_words = list(filter(lambda x: x[0] != delete_dep_number, self.right_dep_words))
-                return self.right_dep_words
+                if self.left_word_pos is not None:
+                    self.cur_word_pos = self.left_word_pos
+                    self.right_word = False
+                else:
+                    self.flag_dep_end = True
 
-    def change_direct(self):
-        if not self.flag_other_direction:
-            # Смотрели только в одном направлении, смотрим в другом
-            self.flag_other_direction = True
-            self.point_cur_dep = 0
-            self.dep_words = self.left_dep_words
-            self.dep_direction *= -1
-            if len(self.dep_words) > 0:
-                self.cur_dep = self.dep_words[self.point_cur_dep]
-                return self.dep_words[0]
-        self.flag_end = True
-        return None
+    def set_next_right(self):
+        if self.right_word_pos is None:
+            return
+        self.right_word_pos += 1
+        while self.right_word_pos < self.len_sent and self.right_word_pos not in self.dep_dict.keys():
+            self.right_word_pos += 1
 
+        if self.right_word_pos >= self.len_sent:
+            self.right_word_pos = None
+            if self.left_word_pos is None:
+                self.flag_dep_end = True
+
+    def set_next_left(self):
+        if self.left_word_pos is None:
+            return
+        self.left_word_pos -= 1
+        while self.left_word_pos >= 0 and self.left_word_pos not in self.dep_dict.keys():
+            self.left_word_pos -= 1
+
+        if self.left_word_pos < 0:
+            self.left_word_pos = None
+            if self.right_word_pos is None:
+                self.flag_dep_end = True
+
+    def delete_word(self, number_word_pos):
+        if number_word_pos in self.dep_dict.keys():
+            if self.cur_word_pos == number_word_pos:
+                self.set_next_cur_word()
+            else:
+                if self.right_word_pos == number_word_pos:
+                    self.set_next_right()
+                elif self.left_word_pos == number_word_pos:
+                    self.set_next_left()
+            self.dep_dict.pop(number_word_pos)
+            if self.dep_dict == {}:
+                self.flag_dep_end = True
+
+    def is_end(self):
+        return self.flag_dep_end
 
 class Attempts:
-    def __init__(self, word_variants_list, all_patterns_list_param, morph_position_dict,
-                 word_position_dict):
-        self.all_patterns_list = all_patterns_list_param  # для дальнешего извлечения моделей
-        self.morph_position_dict = morph_position_dict
-        self.word_position_dict = word_position_dict
+    def __init__(self, parse_point_word_list):
+
+        # список вида [[модели управления]],
+        # для каждого варианта разбора каждого слова храним его возможные модели управления
+        # j элементе i элемента all_patterns_list - список моделей управления для j варианта разбора i слова
+        # word - WordInSentence, надо перевызывать
+        self.all_patterns_list = [word.word.get_all_form_patterns() for word in parse_point_word_list] # для дальнешего извлечения моделей
+
+        self.word_variants_list = []  # список, в какой позиции, какой вариант мб
+        # список неразобранных словоформ [(номер слова, номер варианта)]
+
+        for i in range(len(parse_point_word_list)):
+            self.word_variants_list += [(i, j) for j in range(len(parse_point_word_list[i].word.forms))]
+
+        self.morph_position_dict = {}
+        # ключ - морф.характеристика, значение - set из пар (позиция слова, номер варианта разбора)
+
+        self.word_position_dict = {}
+        # ключ - нач.форма слова, значение - set из пар (позиция слова, номер варианта разбора)
+        for word_position in range(len(parse_point_word_list)):
+            word = parse_point_word_list[word_position].word
+            for form_position in range(len(word.forms)):
+                form = word.forms[form_position]
+                for cur_param in form.morph.get_imp():
+                    if cur_param not in self.morph_position_dict.keys():
+                        self.morph_position_dict[cur_param] = set()
+                    self.morph_position_dict[cur_param].add((word_position, form_position))
+
+                if form.normal_form not in self.word_position_dict.keys():
+                    self.word_position_dict[form.normal_form] = set()
+                self.word_position_dict[form.normal_form].add((word_position, form_position))
+
+
+        self.len_sent = len(parse_point_word_list)
 
         self.main_pattern_list = []
         # список вида [(главное слово, модель управления)]
-        self.word_variants_list = word_variants_list
-        # список неразобранных словоформ [(номер слова, номер варианта)]
         self.unavailable = set()
         self.current_main = None
         self.current_pattern = None
-        self.current_dep = None
-        self.current_main_pattern_index = None  # индекс текущей пары главное + модель в main_pattern_list
+        self.current_dep_variant = None
+        self.current_dep_position = None
+        self.dep_creator = None
         self.dep_dict = {}  # по главному + модели возвращается DepWords
         self.flag_end = False
 
     def next(self):
-        if self.current_dep is not None:
-            new_dep = self.current_dep.next_dep()
+        if self.dep_creator is not None:
+            new_dep = self.dep_creator.next_dep()
             if new_dep is not None:
+                (self.current_dep_position, self.current_dep_variant) = new_dep
                 return
         self.next_main_pattern()
         if self.flag_end:
             return None
-        return self.current_main, self.current_pattern, self.current_dep.cur_dep[0], self.current_dep.cur_dep[1]
+        return self.current_main, self.current_pattern, self.current_dep_position, self.current_dep_variant
 
     def find_potential_main_pattern(self):
-        # может быть три исхода 1. нашли, все ок
-        # 2. надо заново запустить next_main_pattern, тк для найденной пары (главное, модель) нет зависимых
-        # 3. больше нет пар
-
         number_of_best_pair = find_best_pattern_in_list(self.main_pattern_list)
         if number_of_best_pair is None:
             return None, None
         (current_main, current_pattern) = self.main_pattern_list[number_of_best_pair]
-        current_dep = self.get_dep_for_new_pair_main_pattern(current_main, current_pattern)
-        return number_of_best_pair, current_dep
+        dep = self.get_dep_for_new_pair_main_pattern(current_main, current_pattern)
+        return number_of_best_pair, dep
+
+    def delete_similar(self):
+        del_index = []
+        for i in range(len(self.main_pattern_list)):
+            (main, pat) = self.main_pattern_list[i]
+            if self.current_main == main and self.current_pattern.is_similar(pat):
+                if self.current_pattern.level > pat.level: #todo объяснение
+                    del_index.append(i)
+        for i in range(len(del_index) - 1, -1, -1):
+            self.delete_main_pattern_pair_with_number(del_index[i])
 
     def next_main_pattern(self):
         """Используется только для получения новой пары главное+модель, старая себя исчерпала"""
         # ищем пару (главное слово, модель) с максимальной оценкой(лучше 3 уровня, потом 2, потом 1)
-        if self.current_main_pattern_index is not None:
+        if self.current_main is not None:
             # удаляем пару (главное, модель) из списка и из словаря,
             # тк мы проверили для нее все зависимые, больше с ней ничего сделать нельзя
-            self.main_pattern_list.pop(self.current_main_pattern_index)
-        if (self.current_main, self.current_pattern) in self.dep_dict.keys():
-            self.dep_dict.pop((self.current_main, self.current_pattern))
-        (number_of_best_pair, current_dep) = self.find_potential_main_pattern()
-        while (number_of_best_pair is not None) and (current_dep is None):
+            self.delete_main_pattern_pair((self.current_main, self.current_pattern))
+
+        (number_of_best_pair, dep_creat) = self.find_potential_main_pattern()
+        # может быть три исхода 1. нашли, все ок
+        # 2. надо заново запустить next_main_pattern, тк для найденной пары (главное, модель) нет зависимых
+        # 3. больше нет пар
+        while (number_of_best_pair is not None) and (dep_creat is None):
             # для данной пары (главное, модель) нет зависимых
-            self.main_pattern_list.pop(number_of_best_pair)
-            (number_of_best_pair, current_dep) = self.find_potential_main_pattern()
-        print(current_dep)
+            self.delete_main_pattern_pair_with_number(number_of_best_pair)
+
+            (number_of_best_pair, dep_creat) = self.find_potential_main_pattern()
         if number_of_best_pair is None:
             # больше списке пар self.main_pattern_list нет вариантов
             self.flag_end = True
             return None
-        self.current_main_pattern_index = number_of_best_pair
         (self.current_main, self.current_pattern) = self.main_pattern_list[number_of_best_pair]
-        self.current_dep = current_dep
+        # удаляем похожие (для данного слова для модели 3 уровня удаляем 2 и 1 уровня с такими же требованиями и тп)
+        self.delete_similar()
+        self.dep_creator = dep_creat
+        self.current_dep_position, self.current_dep_variant = self.dep_creator.next_dep()
         return self.current_main, self.current_pattern
 
     def delete_variants_of_new_parsed(self, new_parsed):
-        new_word_variants_list = []
-        for (cur_position, cur_variant) in self.word_variants_list:
+        delete_indexes = []
+        for i in range(len(self.word_variants_list)):
+            (cur_position, cur_variant) = self.word_variants_list[i]
             if cur_position == new_parsed:
                 self.unavailable.add((cur_position, cur_variant))
-            else:
-                new_word_variants_list.append((cur_position, cur_variant))
-        self.word_variants_list = new_word_variants_list
+                #здесь ?
+                delete_indexes.append(i)
+        for i in range(len(delete_indexes) - 1, -1, -1):
+            self.delete_main_pattern_pair_with_number(delete_indexes[i])
 
     def copy(self):
         # all_patterns_list, morph_position_dict, word_position_dict - для всех Attempts общие
-        # current_main, current_main_pattern_index - числа, flag_end - Bool
+        # current_main, current_dep_position, current_dep_variant - числа, flag_end - Bool
         # current_pattern только указывает на константный класс GPatterns
         new_att = copy.copy(self)
         new_att.unavailable = copy.deepcopy(self.unavailable)
-        new_att.dep_dict = copy.deepcopy(self.dep_dict)
-        new_att.word_variants_list = copy.deepcopy(self.word_variants_list)
-        new_att.main_pattern_list = copy.deepcopy(self.main_pattern_list)
-        new_att.current_dep = copy.deepcopy(self.current_dep)
+        new_att.dep_dict = {}
+        # копирование ключей специально неглубокое, чтобы pattern в ключе остался таким же
+        for (key, value) in self.dep_dict.items():
+            new_att.dep_dict[key] = copy.deepcopy(value)
+        new_att.word_variants_list = copy.deepcopy(self.word_variants_list) # можно неглубокое ?
+        #копирование специально неглубокое, чтобы не менять константные элементы
+        new_att.main_pattern_list = copy.copy(self.main_pattern_list)
+        new_att.dep_creator = copy.deepcopy(self.dep_creator)
         return new_att
 
     def create_first(self, main_pos, main_var):
@@ -272,33 +325,39 @@ class Attempts:
         # здесь пока не валидны current_main, current_pattern, тк мб этот Attempts никогда не будет вычислен
         self.current_main = None
         self.current_pattern = None
-        self.current_dep = None
-        self.current_main_pattern_index = None  # индекс текущей пары главное + модель в main_pattern_list
+        self.dep_creator = None
+        self.current_dep_variant = None
+        self.current_dep_position = None
         self.flag_end = False
+
 
     def create_child(self):
         """создаем новую структуру, дочернюю данной(в ней применена текущая модель управления)"""
-        # current_dep - фиксируем, переводим его в main, удаляем из Dep все с данным зависимым"
-        new_parsed = self.current_dep.cur_dep[0]
-        self.add_new_main_patterns(self.current_dep.cur_dep)
+        # self.current_dep_position, self.current_dep_variant - фиксируем, переводим его в main,
+        # удаляем из Dep все с данным зависимым"
+        new_parsed = self.current_dep_position
+        self.add_new_main_patterns(self.current_dep_position, self.current_dep_variant)
         deleted_keys = []
         for key in self.dep_dict.keys():
-            del_res = self.dep_dict[key].delete_from_two_part(new_parsed)
-            # None возвращается, если запустили delete_in_cur_half, и она вернула None(те пот.зависимые закончились)
-            # те для данной пары key = (главное, модель) в новой точке разбора нет зависимых,
-            # те ее надо удалить из словаря и из списка
-            if del_res is None:
+            self.dep_dict[key].delete_word(new_parsed)
+            if self.dep_dict[key].is_end():
+                #после удаления слова из потенц.зависимых в dep_creator для этой пары главное + модель закончились слова
                 deleted_keys.append(key)
-                self.main_pattern_list.remove(key)
         for del_key in deleted_keys:
-            self.dep_dict.pop(del_key)
+            self.delete_main_pattern_pair(del_key)
+
+            # работа с dep_creator применяемой пары главное + модель
         self.delete_variants_of_new_parsed(new_parsed)
-        del_res = self.current_dep.delete_in_cur_half(new_parsed)
-        if del_res is not None:
+        self.dep_creator.delete_word(new_parsed)
+        if not self.dep_creator.is_end():
             # для данной пары (главное, модель) еще могут быть зависимые(например, в случае однородности),
             # сохраняем информацию о зависимых
-            self.dep_dict[(self.current_main, self.current_pattern)] = self.current_dep
-        self.current_dep = None
+            self.dep_dict[(self.current_main, self.current_pattern)] = self.dep_creator
+        self.dep_creator = None
+        self.current_main = None
+        self.current_pattern = None
+        self.current_dep_position = None
+        self.current_dep_variant = None
 
     def create_dep(self, pattern, main_index):
         morph_constraints = pattern.get_dep_morph_constraints()
@@ -318,14 +377,11 @@ class Attempts:
         if itog_set == set():
             return None
         dep_pos_vars_for_constraints = sorted(itog_set)
-        return DepWords(dep_pos_vars_for_constraints, main_index)
+        return DepWords(dep_pos_vars_for_constraints, main_index, self.len_sent)
 
-    def add_new_main_patterns(self, new_main):
-        cur_main = new_main[0]
-        cur_variant = new_main[1]
-        patterns_new_main = self.all_patterns_list[cur_main][cur_variant]
-
-        main_patterns_new_main = [(cur_main, pattern) for pattern in patterns_new_main]
+    def add_new_main_patterns(self, cur_main_pos, cur_variant):
+        patterns_new_main = self.all_patterns_list[cur_main_pos][cur_variant]
+        main_patterns_new_main = [(cur_main_pos, pattern) for pattern in patterns_new_main]
         self.main_pattern_list += main_patterns_new_main
 
     def get_dep_for_new_pair_main_pattern(self, new_main, new_pattern):
@@ -333,8 +389,18 @@ class Attempts:
         if new_key in self.dep_dict.keys():
             return self.dep_dict[new_key]
         else:
-            current_dep = self.create_dep(new_pattern, new_main)
-            if current_dep is not None:
-                return current_dep
+            dep = self.create_dep(new_pattern, new_main)
+            if dep is not None:
+                return dep
             else:
                 return None  # для новой модели нет зависимых, идем к следующей
+
+    def delete_main_pattern_pair(self, pair):
+        self.main_pattern_list.remove(pair)
+        if pair in self.dep_dict.keys():
+            self.dep_dict.pop(pair)
+
+    def delete_main_pattern_pair_with_number(self, pair_number):
+        pair = self.main_pattern_list.pop(pair_number)
+        if pair in self.dep_dict.keys():
+            self.dep_dict.pop(pair)

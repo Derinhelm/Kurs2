@@ -24,21 +24,21 @@ class ParsePointWordView:
 
 
 class ParsePointView:
-    def __init__(self, title, window_title, words_count=None):  # toDo сделать проход по ParsePoint ?
+    def __init__(self, point_title, sent_title, words_count=None):  # toDo сделать проход по ParsePoint ?
         self.graph = nx.DiGraph()
-        self.window_title = window_title
+        self.sent_title = sent_title
         self.words_view = []
         for i in range(words_count):
             new_word_view = ParsePointWordView("not parsed")
             self.words_view.append(new_word_view)
-        self.title = title
+        self.point_title = point_title
 
     def change_word_view(self, word_position, word_info):
         self.words_view[word_position].set_text(word_info)
 
-    def create_child_view(self, title, main_word, dep_word=None):
+    def create_child_view(self, point_title, main_word, dep_word=None):
         child = copy.deepcopy(self)
-        child.title = title
+        child.point_title = point_title
         main_title = main_word.word.word_text + "_" + str(main_word.number_in_sentence)
         if dep_word is None:
             # первая для разбора точка
@@ -56,18 +56,20 @@ class ParsePointView:
         number_windows += 1
         fig = plt.figure(number_windows)
         pos = graphviz_layout(self.graph, prog='dot')
+        for (k, v) in pos.items():
+            pos[k] = (v[0] * 10, v[1])
         x_values, y_values = zip(*pos.values())
         x_max = max(x_values)
         x_min = min(x_values)
-        x_margin = (x_max - x_min) * 0.25
+        x_margin = (x_max - x_min) * 0.4
         plt.xlim(x_min - x_margin, x_max + x_margin)
         y_max = max(y_values)
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
         plt.ylim(y_min - y_margin, y_max + y_margin)
         nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
-                verticalalignment='top', font_size=20)
-        plt.title(self.title)
+                verticalalignment='top', font_size=12)
+        plt.title(self.sent_title)
 
         # w1, h1 = fig.canvas.get_width_height()
         # buf = numpy.fromstring(fig.canvas.tostring_argb(), dtype=numpy.uint8)
@@ -90,7 +92,7 @@ class ParsePointView:
         x_values, y_values = zip(*pos.values())
         x_max = max(x_values)
         x_min = min(x_values)
-        x_margin = (x_max - x_min) * 0.25
+        x_margin = (x_max - x_min) * 0.4
         plt.xlim(x_min - x_margin, x_max + x_margin)
         y_max = max(y_values)
         y_min = min(y_values)
@@ -99,7 +101,7 @@ class ParsePointView:
         fig.canvas.mpl_connect('button_press_event', lambda event: self.on_mouse_click_parse_point(event, pos))
         nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
                 verticalalignment='top', font_size=20)
-        plt.title(self.title)
+        plt.title(self.sent_title)
         fig.canvas.draw_idle()
         plt.show()
 
@@ -125,16 +127,16 @@ class ParsePointTreeView:
         self.dict_parse_points = {}  # словарь соответствия названия точки - ее view
         self.title = title
         self.graph = nx.DiGraph()
-        self.dict_parse_points[root_view.title] = root_view
-        self.graph.add_node(root_view.title)
+        self.dict_parse_points[root_view.point_title] = root_view
+        self.graph.add_node(root_view.point_title)
 
     def add_edge(self, parent_view: ParsePointView, child_view: ParsePointView, pattern: str = None):
-        self.graph.add_node(child_view.title)
+        self.graph.add_node(child_view.point_title)
         if pattern is None:
-            self.graph.add_edge(parent_view.title, child_view.title, n="first word")
+            self.graph.add_edge(parent_view.point_title, child_view.point_title, n="first word")
         else:
-            self.graph.add_edge(parent_view.title, child_view.title, n=pattern)
-        self.dict_parse_points[child_view.title] = child_view
+            self.graph.add_edge(parent_view.point_title, child_view.point_title, n=pattern)
+        self.dict_parse_points[child_view.point_title] = child_view
 
     def on_mouse_click_tree(self, event, pos):
         global number_windows
