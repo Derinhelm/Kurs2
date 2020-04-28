@@ -133,6 +133,17 @@ class Morph:  # для хранения морфологических хара�
                 return False
         return True
 
+    def is_preposition(self):
+        return self.s_cl == 'preposition'
+
+    def is_verb(self):
+        return self.s_cl == 'verb'
+
+    def is_noun_or_adj(self):
+        return self.s_cl in ['noun', 'adjective', 'participle']
+
+    def is_nominative(self):
+        return self.case_morph == 'nominative'
 
 class WordForm:
     def __init__(self, morph: Morph, normal_form, prob):

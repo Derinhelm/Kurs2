@@ -4,7 +4,7 @@ import PyQt5.QtGui
 import os
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QLineEdit, QListWidget, QWidget, QHBoxLayout, QDesktopWidget, QHeaderView, QSlider,
+from PyQt5.QtWidgets import (QListWidget, QWidget, QHBoxLayout, QDesktopWidget, QHeaderView,
                              QApplication, QLabel, QGridLayout, QVBoxLayout, QPushButton, QLineEdit, QTableWidget,
                              QTableWidgetItem, QButtonGroup, QScrollArea)
 from PyQt5.QtGui import QPixmap
@@ -27,12 +27,20 @@ class BeginWindow(QWidget):
         end = ResWindow(self, s, c)
         self.close()
         end.show()
+        x = 0
+        self.destroy()
+
 
     def build(self, first_flag):
         sentence_title = QLabel("Предложение")
+        sentence_title.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Times))
         self.sentence = QLineEdit()
+        self.sentence.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Times))
+
         count_title = QLabel("Количество разборов")
+        count_title.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Times))
         self.count = QLineEdit()
+        self.count.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Times))
 
         hbox = QHBoxLayout()
         hbox.addWidget(sentence_title)
@@ -56,7 +64,7 @@ class BeginWindow(QWidget):
 
         self.setLayout(vbox)
 
-        self.setGeometry(444, 300, 350, 300)
+        self.setGeometry(444, 300, 800, 300)
         self.center()
         self.setWindowTitle('Начало работы')
         if first_flag:
@@ -79,37 +87,67 @@ class ResWindow(QWidget):
         self.point_button = []
         self.tree_button = []
         for (t, point, tree) in self.res:
-            number_column = 0
-            s = ""
-            for w in t:
-                s += str(w) + "\n"
-            text_title = QLabel(s)
-            text_title.setFixedWidth(400)
-            text_title.setWordWrap(True)
-            text_title.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Bold))
-            grid.addWidget(text_title, number_res, number_column)
+            if t != None:
+                number_column = 0
+                table = QTableWidget(self)
+                table.setRowCount(2)
+                table.setColumnCount(len(t))
+                table.setWordWrap(True)
+                table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+                table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+                for number_column_t in range(len(t)):
+                    w = t[number_column_t]
+                    item = QTableWidgetItem(w.get_word_text())
+                    item.setTextAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
+                    table.setItem(0, number_column_t, item)
+                    x = str(w.get_morph()).replace("; ", "\n")
+                    table.setItem(1, number_column_t, QTableWidgetItem(x))
+                table.verticalHeader().hide()
+                #text_title = QLabel(s)
 
-            number_column += 1
-            t = point.easy_visualize()
-            lbl = QLabel(self)
-            lbl.setPixmap(QPixmap(t))
-            #lbl.setFixedWidth(500)
-            grid.addWidget(lbl, number_res, number_column)
-            #os.remove(t)
 
-            number_column += 1
-            self.point_button.append(QPushButton("Визуализировать точку разбора"))
-            self.point_button[number_res].clicked.connect(functools.partial(self.point_vis, number = number_res))
-            self.point_button[number_res].setFixedWidth(250)
-            grid.addWidget(self.point_button[number_res], number_res, number_column)
+                #text_title.setWordWrap(True)
+                table.setFont(PyQt5.QtGui.QFont("Times", 18, PyQt5.QtGui.QFont.Times))
+                #table.setFixedSize(len(t) * 100, 2 * 100)
+                grid.addWidget(table, number_res, number_column)
 
-            number_column += 1
-            self.tree_button.append(QPushButton("Визуализировать дерево"))
-            self.tree_button[number_res].clicked.connect(functools.partial(self.tree_vis, number = number_res))
-            self.tree_button[number_res].setFixedWidth(250)
+                number_column += 1
+                t = point.easy_visualize()
+                lbl = QLabel(self)
+                lbl.setPixmap(QPixmap(t))
+                #lbl.setFixedWidth(500)
+                grid.addWidget(lbl, number_res, number_column)
+                #os.remove(t)
 
-            grid.addWidget(self.tree_button[number_res], number_res, number_column)
-            number_res += 1
+                number_column += 1
+                self.point_button.append(QPushButton("Визуализировать точку разбора"))
+                self.point_button[number_res].clicked.connect(functools.partial(self.point_vis, number = number_res))
+                self.point_button[number_res].setFixedWidth(250)
+                grid.addWidget(self.point_button[number_res], number_res, number_column)
+
+                number_column += 1
+                self.tree_button.append(QPushButton("Визуализировать дерево"))
+                self.tree_button[number_res].clicked.connect(functools.partial(self.tree_vis, number = number_res))
+                self.tree_button[number_res].setFixedWidth(250)
+
+                grid.addWidget(self.tree_button[number_res], number_res, number_column)
+                number_res += 1
+            else:
+                number_column = 0
+                s = "Больше вариантов разбора нет. "
+                text_title = QLabel(s)
+                text_title.setFixedWidth(400)
+                text_title.setWordWrap(True)
+                text_title.setFont(PyQt5.QtGui.QFont("Times", 20, PyQt5.QtGui.QFont.Bold))
+                grid.addWidget(text_title, number_res, number_column)
+
+                number_column += 3
+                self.tree_button.append(QPushButton("Визуализировать дерево"))
+                self.tree_button[number_res].clicked.connect(functools.partial(self.tree_vis, number=number_res))
+                self.tree_button[number_res].setFixedWidth(250)
+
+                grid.addWidget(self.tree_button[number_res], number_res, number_column)
+                number_res += 1
 
         widg = QWidget()
 

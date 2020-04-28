@@ -47,11 +47,32 @@ class WordInSentence:
             return self.word.forms[self.used_morph_answer].normal_form
         return None
 
+    def get_word_text(self):
+        return self.word.word_text
+
     def is_preposition(self):
         m = self.get_morph()
         if m is None:
-            return None
-        return m.s_cl == 'preposition'
+            return False
+        return m.is_preposition()
+
+    def is_verb(self):
+        m = self.get_morph()
+        if m is None:
+            return False
+        return m.is_verb()
+
+    def is_nominative(self):
+        m = self.get_morph()
+        if m is None:
+            return False
+        return m.is_nominative()
+
+    def is_noun_or_adj(self):
+        m = self.get_morph()
+        if m is None:
+            return False
+        return m.is_noun_or_adj()
 
     def add_gp(self, pattern: GPattern, dep_word):
         # dep_word - WordInSentence
@@ -73,7 +94,7 @@ class ParsePoint:
         self.count_parsed_words = 0
         self.parsed = []
         self.number_point = 0
-
+        self.status = 'intermediate'
 
 
         self.attempts = Attempts(self.parse_point_word_list)
@@ -102,6 +123,18 @@ class ParsePoint:
     def check_is_word_in_dependent_group(self, number_main, number_dep):
         return True  # toDo ПЕРЕПИСАТЬ!!!!!
 
+    def create_status(self):
+        if self.check_end_parse():
+            if self.check_prep() and not self.verb_has_homogeneous_subject():
+                self.status = 'right'
+            else:
+                self.status = 'wrong'
+        else:
+            self.status = 'intermediate'
+
+    def close(self):
+        self.status = 'intermediate-close'
+
     def copy(self):
         """create copy of ParsePoint"""
         # надо писать вручную из-за attempts.copy
@@ -124,9 +157,9 @@ class ParsePoint:
         new_parse_point.count_parsed_words += 1
         new_parse_point.number_point = max_number_point + 1
         new_parse_point.attempts.create_first(main_pos, main_var)
-
+        new_parse_point.create_status()
         main_word = new_parse_point.parse_point_word_list[main_pos]
-        new_parse_point.view = self.view.create_child_view(new_parse_point.__repr__(), main_word)
+        new_parse_point.view = self.view.create_child_view(new_parse_point,  main_word)
         return new_parse_point
 
     def find_first_word(self, fun):
@@ -162,12 +195,14 @@ class ParsePoint:
 
         new_parse_point.number_point = max_number_point + 1
         new_parse_point.attempts.create_child()
+        new_parse_point.create_status()
 
         dep_word = new_parse_point.parse_point_word_list[depending_pp_word_pos]
         main_word = new_parse_point.parse_point_word_list[main_pp_word_pos]
-        new_parse_point.view = self.view.create_child_view(new_parse_point.__repr__(), main_word, dep_word)
+        new_parse_point.view = self.view.create_child_view(new_parse_point, main_word, dep_word)
         self.child_parse_point.append(new_parse_point)
-        return new_parse_point, g_pattern_to_apply
+        word_pair_text = str(g_pattern_to_apply.get_mark()) + ": " + str(main_pp_word_pos) + " + " + str(depending_pp_word_pos)
+        return new_parse_point, g_pattern_to_apply, word_pair_text
 
     def check_end_parse(self):
         """check that all words in this ParsePoint are parsed"""
@@ -190,36 +225,52 @@ class ParsePoint:
                     return False
         return True
 
+    def verb_has_homogeneous_subject(self):
+        #если у глагола есть два зависимых именной части речи (сущ, прил и тп) И.п, то это однородн.подлежащие
+        for i in range(len(self.parse_point_word_list)):
+            cur_main = self.parse_point_word_list[i]
+            count_subject = 0
+            if cur_main.is_verb():
+                for cur_gp in cur_main.used_gp:
+                    if cur_gp.dep_word.is_noun_or_adj():
+                        if cur_gp.dep_word.is_nominative():
+                            count_subject += 1
+                            if count_subject > 1:
+                                return True
+        return False
+
+
+
 class Sentence:
-    def __init__(self, str1):
-        self.input_str = ""
+    def __init__(self, input_str):
         self.best_parse_points = []  # хранится список точек разбора, упорядоченных по убыванию оценки
         self.max_number_parse_point = 0
 
-        word_list: [str] = self.split_string(str1)
-        con = psycopg2.connect(dbname='gpatterns_3', user='postgres',
+        word_list, sent_title = self.split_string(input_str)
+        self.sent_title_numb = sent_title
+        self.sent_title_without_numb = input_str
+        con = psycopg2.connect(dbname='gpatterns_copy', user='postgres',
                                password='postgres', host='localhost')
         morph_analyzer = pymorphy2.MorphAnalyzer()
-        self.root_p_p = ParsePoint(word_list, con, morph_analyzer, self.input_str)
-        self.view = ParsePointTreeView(self.input_str, self.root_p_p.view)
+        self.root_p_p = ParsePoint(word_list, con, morph_analyzer, self.sent_title_without_numb)
+        self.view = ParsePointTreeView(self.sent_title_numb, self.root_p_p.view)
         self.create_first_parse_points()
         con.close()
 
     def __repr__(self):
-        return self.input_str
+        return self.sent_title
 
-    def split_string(self, input_str1):
-        self.input_str = input_str1
+    def split_string(self, input_str):
         # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
         #: ; " ' началом предложения, запятой, (   ) тире вообще не учитываем(оно отделено пробелами),
         # дефис только в словах очень-очень и тп,
         punctuation = [' ', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
         cur_word = ""
         word_list = []
-        for i in range(len(self.input_str)):
-            cur_symbol = self.input_str[i]
+        for i in range(len(input_str)):
+            cur_symbol = input_str[i]
             if (cur_symbol in punctuation) or (
-                    cur_symbol == '.' and (i == len(self.input_str) - 1 or self.input_str[i + 1] not in punctuation)):
+                    cur_symbol == '.' and (i == len(input_str) - 1 or input_str[i + 1] not in punctuation)):
                 # (cur_symbol == '.' ... - точка, но не сокращение
                 if len(cur_word) != 0:
                     word_list.append(cur_word.lower())
@@ -228,7 +279,11 @@ class Sentence:
                 cur_word = cur_word + cur_symbol
         if len(cur_word) != 0:
             word_list.append(cur_word.lower())
-        return word_list
+
+        s = ""
+        for i in range(len(word_list)):
+            s += word_list[i] + "_" + str(i) + " "
+        return word_list, s[:-1] + input_str[-1]
 
     def create_first_parse_points(self):
 
@@ -260,23 +315,32 @@ class Sentence:
         self.best_parse_points.insert(0, new_point)
 
     def get_best_parse_point(self):
+        if len(self.best_parse_points) == 0:
+            return None
         return self.best_parse_points[0]
+
+    def close_point(self):
+        self.best_parse_points[0].close()
+        self.best_parse_points.pop(0)
+
 
     def sint_parse(self):
 
         while True:
             best_parse_point = self.get_best_parse_point()
+            if best_parse_point is None:
+                print("Не разобрано!")
+                return None
             res = best_parse_point.create_child_parse_point(self.max_number_parse_point)
             print(res)
             if res is None:
-                print("Не разобрано!")
-                return None
+                self.close_point()
+                self.view.close_node(best_parse_point.view.point_label)
             else:
-                (new_point, pattern) = res
+                (new_point, pattern, word_pair_text) = res
                 self.max_number_parse_point += 1
-                self.view.add_edge(best_parse_point.view, new_point.view, pattern.__repr__())
-                if new_point.check_end_parse():
-                    if new_point.check_prep():
+                self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
+                if new_point.status == 'right':
                         print("------")
                         return new_point
                 else:

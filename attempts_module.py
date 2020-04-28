@@ -248,6 +248,11 @@ class Attempts:
         if number_of_best_pair is None:
             return None, None
         (current_main, current_pattern) = self.main_pattern_list[number_of_best_pair]
+
+        #костыль, пар сущ + сущ
+        #if 'noun' in current_pattern.main_word_constraints and 'noun' in current_pattern.dependent_word_constraints:
+        #    return number_of_best_pair, None # хотим проигнорировать эту модельЯ
+
         dep = self.get_dep_for_new_pair_main_pattern(current_main, current_pattern)
         return number_of_best_pair, dep
 
@@ -255,11 +260,18 @@ class Attempts:
         del_index = []
         for i in range(len(self.main_pattern_list)):
             (main, pat) = self.main_pattern_list[i]
-            if self.current_main == main and self.current_pattern.is_similar(pat):
+            if self.current_main == main and self.current_pattern.is_identical_dif_level(pat):
                 if self.current_pattern.level > pat.level: #todo объяснение
                     del_index.append(i)
+
+            elif self.current_main == main and self.current_pattern.is_extended(pat):#todo объяснение
+                # тк мы рассмотрели current_main раньше pat, то current_main.mark >= pat.mark
+                del_index.append(i)
+
         for i in range(len(del_index) - 1, -1, -1):
             self.delete_main_pattern_pair_with_number(del_index[i])
+
+
 
     def next_main_pattern(self):
         """Используется только для получения новой пары главное+модель, старая себя исчерпала"""
@@ -390,10 +402,10 @@ class Attempts:
             return self.dep_dict[new_key]
         else:
             dep = self.create_dep(new_pattern, new_main)
-            if dep is not None:
-                return dep
+            if dep is None or dep.is_end():
+                return None # для новой модели нет зависимых
             else:
-                return None  # для новой модели нет зависимых, идем к следующей
+                return dep
 
     def delete_main_pattern_pair(self, pair):
         self.main_pattern_list.remove(pair)

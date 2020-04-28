@@ -10,6 +10,7 @@ def parse(str1, count = 1):
         print("------------------------------------------------------", i)
         res = s.sint_parse()
         if res is None:
+            ans.append((None, None, s.view))
             break
         trace_view_copy = copy.deepcopy(s.view)
         ans.append((res.parse_point_word_list, res.view, trace_view_copy))
