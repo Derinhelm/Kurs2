@@ -1,21 +1,16 @@
+import functools
 import sys
 
 import PyQt5.QtGui
-import os
-
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QListWidget, QWidget, QHBoxLayout, QDesktopWidget, QHeaderView,
-                             QApplication, QLabel, QGridLayout, QVBoxLayout, QPushButton, QLineEdit, QTableWidget,
-                             QTableWidgetItem, QButtonGroup, QScrollArea)
 from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QDesktopWidget, QHeaderView,
+                             QApplication, QLabel, QGridLayout, QVBoxLayout, QPushButton, QLineEdit, QTableWidget,
+                             QTableWidgetItem, QScrollArea)
+
 from main import parse
-import functools
-from parse_point_module import WordInSentence
-from visualize import ParsePointView, ParsePointTreeView, ParsePointWordView
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
-from PIL import Image
+
+
 class BeginWindow(QWidget):
     def __init__(self, parent=None, first_flag=False):
         super().__init__(parent, Qt.Window)
@@ -27,9 +22,7 @@ class BeginWindow(QWidget):
         end = ResWindow(self, s, c)
         self.close()
         end.show()
-        x = 0
         self.destroy()
-
 
     def build(self, first_flag):
         sentence_title = QLabel("Предложение")
@@ -78,6 +71,7 @@ class BeginWindow(QWidget):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
+
 class ResWindow(QWidget):
     def __init__(self, parent, s, count):
         super().__init__(parent, Qt.Window)
@@ -103,31 +97,30 @@ class ResWindow(QWidget):
                     x = str(w.get_morph()).replace("; ", "\n")
                     table.setItem(1, number_column_t, QTableWidgetItem(x))
                 table.verticalHeader().hide()
-                #text_title = QLabel(s)
+                # text_title = QLabel(s)
 
-
-                #text_title.setWordWrap(True)
+                # text_title.setWordWrap(True)
                 table.setFont(PyQt5.QtGui.QFont("Times", 18, PyQt5.QtGui.QFont.Times))
-                #table.setFixedSize(len(t) * 100, 2 * 100)
+                # table.setFixedSize(len(t) * 100, 2 * 100)
                 grid.addWidget(table, number_res, number_column)
 
                 number_column += 1
                 t = point.easy_visualize()
                 lbl = QLabel(self)
                 lbl.setPixmap(QPixmap(t))
-                #lbl.setFixedWidth(500)
+                # lbl.setFixedWidth(500)
                 grid.addWidget(lbl, number_res, number_column)
-                #os.remove(t)
+                # os.remove(t)
 
                 number_column += 1
                 self.point_button.append(QPushButton("Визуализировать точку разбора"))
-                self.point_button[number_res].clicked.connect(functools.partial(self.point_vis, number = number_res))
+                self.point_button[number_res].clicked.connect(functools.partial(self.point_vis, number=number_res))
                 self.point_button[number_res].setFixedWidth(250)
                 grid.addWidget(self.point_button[number_res], number_res, number_column)
 
                 number_column += 1
                 self.tree_button.append(QPushButton("Визуализировать дерево"))
-                self.tree_button[number_res].clicked.connect(functools.partial(self.tree_vis, number = number_res))
+                self.tree_button[number_res].clicked.connect(functools.partial(self.tree_vis, number=number_res))
                 self.tree_button[number_res].setFixedWidth(250)
 
                 grid.addWidget(self.tree_button[number_res], number_res, number_column)
@@ -162,7 +155,6 @@ class ResWindow(QWidget):
 
         self.setLayout(box)
 
-
         QApplication.desktop()
         # self.setGeometry(0, 0, e.height(), e.width())
         self.setGeometry(444, 300, 1800, 900)
@@ -177,11 +169,16 @@ class ResWindow(QWidget):
         qr.moveCenter(cp)
         self.move(qr.topLeft())
 
+    def closeEvent(self, evnt):
+        super(ResWindow, self).closeEvent(evnt)
+        app.quit()
+
     def point_vis(self, number):
         self.res[number][1].visualize()
 
     def tree_vis(self, number):
         self.res[number][2].visualize()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
