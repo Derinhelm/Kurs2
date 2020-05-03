@@ -85,17 +85,17 @@ def find_best_pattern_in_list(param_list):
     #    return None
 
 
-class DepWords:
+class DepWordSeacher:
     def __init__(self, dep_list, cur_main, len_sent):
-        self.dep_dict = {}
+        self.pos_variants_dict = {} # словарь, ключ - номер слова в предложении, значение - список номеров словоформ
         self.len_sent = len_sent #
         for (word_pos, variant_number) in dep_list:
-            if word_pos in self.dep_dict.keys():
-                self.dep_dict[word_pos].append(variant_number)
+            if word_pos in self.pos_variants_dict.keys():
+                self.pos_variants_dict[word_pos].append(variant_number)
             else:
-                self.dep_dict[word_pos] = [variant_number]
-        for word_pos in self.dep_dict.keys():
-            self.dep_dict[word_pos].sort()
+                self.pos_variants_dict[word_pos] = [variant_number]
+        for word_pos in self.pos_variants_dict.keys():
+            self.pos_variants_dict[word_pos].sort()
         self.left_word_pos = cur_main
         self.right_word_pos = cur_main
         self.set_next_left()
@@ -112,10 +112,10 @@ class DepWords:
         if self.flag_dep_end:
             return None
         ans_position = self.cur_word_pos
-        ans_variant = self.dep_dict[self.cur_word_pos].pop(0)
+        ans_variant = self.pos_variants_dict[self.cur_word_pos].pop(0)
         # вернули самый вероятный вариант из еще непросмотренных
-        if len(self.dep_dict[self.cur_word_pos]) == 0:
-            self.dep_dict.pop(self.cur_word_pos)
+        if len(self.pos_variants_dict[self.cur_word_pos]) == 0:
+            self.pos_variants_dict.pop(self.cur_word_pos)
             self.set_next_cur_word()
         return (ans_position, ans_variant)
 
@@ -149,7 +149,7 @@ class DepWords:
         if self.right_word_pos is None:
             return
         self.right_word_pos += 1
-        while self.right_word_pos < self.len_sent and self.right_word_pos not in self.dep_dict.keys():
+        while self.right_word_pos < self.len_sent and self.right_word_pos not in self.pos_variants_dict.keys():
             self.right_word_pos += 1
 
         if self.right_word_pos >= self.len_sent:
@@ -161,7 +161,7 @@ class DepWords:
         if self.left_word_pos is None:
             return
         self.left_word_pos -= 1
-        while self.left_word_pos >= 0 and self.left_word_pos not in self.dep_dict.keys():
+        while self.left_word_pos >= 0 and self.left_word_pos not in self.pos_variants_dict.keys():
             self.left_word_pos -= 1
 
         if self.left_word_pos < 0:
@@ -170,7 +170,7 @@ class DepWords:
                 self.flag_dep_end = True
 
     def delete_word(self, number_word_pos):
-        if number_word_pos in self.dep_dict.keys():
+        if number_word_pos in self.pos_variants_dict.keys():
             if self.cur_word_pos == number_word_pos:
                 self.set_next_cur_word()
             else:
@@ -178,27 +178,21 @@ class DepWords:
                     self.set_next_right()
                 elif self.left_word_pos == number_word_pos:
                     self.set_next_left()
-            self.dep_dict.pop(number_word_pos)
-            if self.dep_dict == {}:
+            self.pos_variants_dict.pop(number_word_pos)
+            if self.pos_variants_dict == {}:
                 self.flag_dep_end = True
 
     def is_end(self):
         return self.flag_dep_end
 
-class Attempts:
+class MorphInfo:
     def __init__(self, parse_point_word_list):
-
         # список вида [[модели управления]],
         # для каждого варианта разбора каждого слова храним его возможные модели управления
         # j элементе i элемента all_patterns_list - список моделей управления для j варианта разбора i слова
         # word - WordInSentence, надо перевызывать
-        self.all_patterns_list = [word.word.get_all_form_patterns() for word in parse_point_word_list] # для дальнешего извлечения моделей
-
-        self.word_variants_list = []  # список, в какой позиции, какой вариант мб
-        # список неразобранных словоформ [(номер слова, номер варианта)]
-
-        for i in range(len(parse_point_word_list)):
-            self.word_variants_list += [(i, j) for j in range(len(parse_point_word_list[i].word.forms))]
+        self.all_patterns_list = [word.word.get_all_form_patterns() for word in
+                                  parse_point_word_list]  # для дальнешего извлечения моделей
 
         self.morph_position_dict = {}
         # ключ - морф.характеристика, значение - set из пар (позиция слова, номер варианта разбора)
@@ -218,6 +212,37 @@ class Attempts:
                     self.word_position_dict[form.normal_form] = set()
                 self.word_position_dict[form.normal_form].add((word_position, form_position))
 
+    def create_dep_forms_set(self, pattern):
+        morph_constraints = pattern.get_dep_morph_constraints()
+        word_constraints = pattern.get_dep_word()
+        if not morph_constraints[0] in self.morph_position_dict.keys():
+            return None
+        itog_set = copy.deepcopy(set(self.morph_position_dict[morph_constraints[0]]))
+        for i in range(1, len(morph_constraints)):
+            if not morph_constraints[i] in self.morph_position_dict.keys():
+                return None
+            itog_set = itog_set.intersection(self.morph_position_dict[morph_constraints[i]])
+        if word_constraints is not None:
+            if word_constraints not in self.word_position_dict.keys():
+                return None
+            itog_set = itog_set.intersection(self.word_position_dict[word_constraints])
+        return itog_set
+
+    def get_patterns_for_form(self, word_pos, word_variant):
+        return self.all_patterns_list[word_pos][word_variant]
+
+class NextWordSearcher:
+    def __init__(self, parse_point_word_list):
+
+
+        self.word_variants_list = []  # список, в какой позиции, какой вариант мб
+        # список неразобранных словоформ [(номер слова, номер варианта)]
+
+        for i in range(len(parse_point_word_list)):
+            self.word_variants_list += [(i, j) for j in range(len(parse_point_word_list[i].word.forms))]
+
+        self.morph_info = MorphInfo(parse_point_word_list)
+
 
         self.len_sent = len(parse_point_word_list)
 
@@ -229,7 +254,7 @@ class Attempts:
         self.current_dep_variant = None
         self.current_dep_position = None
         self.dep_creator = None
-        self.dep_dict = {}  # по главному + модели возвращается DepWords
+        self.dep_dict = {}  # по главному + модели возвращается DepWordSeacher
         self.flag_end = False
 
     def next(self):
@@ -248,11 +273,6 @@ class Attempts:
         if number_of_best_pair is None:
             return None, None
         (current_main, current_pattern) = self.main_pattern_list[number_of_best_pair]
-
-        #костыль, пар сущ + сущ
-        #if 'noun' in current_pattern.main_word_constraints and 'noun' in current_pattern.dependent_word_constraints:
-        #    return number_of_best_pair, None # хотим проигнорировать эту модельЯ
-
         dep = self.get_dep_for_new_pair_main_pattern(current_main, current_pattern)
         return number_of_best_pair, dep
 
@@ -307,13 +327,12 @@ class Attempts:
             (cur_position, cur_variant) = self.word_variants_list[i]
             if cur_position == new_parsed:
                 self.unavailable.add((cur_position, cur_variant))
-                #здесь ?
                 delete_indexes.append(i)
         for i in range(len(delete_indexes) - 1, -1, -1):
             self.delete_main_pattern_pair_with_number(delete_indexes[i])
 
     def copy(self):
-        # all_patterns_list, morph_position_dict, word_position_dict - для всех Attempts общие
+        # morphInfo - для всех NextWordSearcher общие
         # current_main, current_dep_position, current_dep_variant - числа, flag_end - Bool
         # current_pattern только указывает на константный класс GPatterns
         new_att = copy.copy(self)
@@ -330,11 +349,11 @@ class Attempts:
 
     def create_first(self, main_pos, main_var):
         """"""
-        patterns_main_word = self.all_patterns_list[main_pos][main_var]  # toDo правильно ??
+        patterns_main_word = self.morph_info.get_patterns_for_form(main_pos, main_var)
         self.main_pattern_list = [(main_pos, pattern) for pattern in patterns_main_word]
 
         self.delete_variants_of_new_parsed(main_pos)
-        # здесь пока не валидны current_main, current_pattern, тк мб этот Attempts никогда не будет вычислен
+        # здесь пока не валидны current_main, current_pattern, тк мб этот NextWordSearcher никогда не будет вычислен
         self.current_main = None
         self.current_pattern = None
         self.dep_creator = None
@@ -372,27 +391,17 @@ class Attempts:
         self.current_dep_variant = None
 
     def create_dep(self, pattern, main_index):
-        morph_constraints = pattern.get_dep_morph_constraints()
-        word_constraints = pattern.get_dep_word()
-        if not morph_constraints[0] in self.morph_position_dict.keys():
+        itog_set = self.morph_info.create_dep_forms_set(pattern)
+        if itog_set is None:
             return None
-        itog_set = copy.deepcopy(set(self.morph_position_dict[morph_constraints[0]]))
-        for i in range(1, len(morph_constraints)):
-            if not morph_constraints[i] in self.morph_position_dict.keys():
-                return None
-            itog_set = itog_set.intersection(self.morph_position_dict[morph_constraints[i]])
-        if word_constraints is not None:
-            if word_constraints not in self.word_position_dict.keys():
-                return None
-            itog_set = itog_set.intersection(self.word_position_dict[word_constraints])
         itog_set = itog_set.difference(self.unavailable)
         if itog_set == set():
             return None
         dep_pos_vars_for_constraints = sorted(itog_set)
-        return DepWords(dep_pos_vars_for_constraints, main_index, self.len_sent)
+        return DepWordSeacher(dep_pos_vars_for_constraints, main_index, self.len_sent)
 
     def add_new_main_patterns(self, cur_main_pos, cur_variant):
-        patterns_new_main = self.all_patterns_list[cur_main_pos][cur_variant]
+        patterns_new_main = self.morph_info.get_patterns_for_form(cur_main_pos, cur_variant)
         main_patterns_new_main = [(cur_main_pos, pattern) for pattern in patterns_new_main]
         self.main_pattern_list += main_patterns_new_main
 

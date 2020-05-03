@@ -1,7 +1,7 @@
 import copy
 import sys
 
-from attempts_module import Attempts
+from next_word_search_module import NextWordSearcher
 from patterns import GPattern
 from visualize import ParsePointView, ParsePointTreeView
 import psycopg2
@@ -97,7 +97,7 @@ class ParsePoint:
         self.status = 'intermediate'
 
 
-        self.attempts = Attempts(self.parse_point_word_list)
+        self.next_word_searcher = NextWordSearcher(self.parse_point_word_list)
         self.view = ParsePointView('root', sent_title, len(self.parse_point_word_list))
 
     def __repr__(self):
@@ -137,7 +137,7 @@ class ParsePoint:
 
     def copy(self):
         """create copy of ParsePoint"""
-        # надо писать вручную из-за attempts.copy
+        # надо писать вручную из-за next_word_searcher.copy
         # count_parsed_words, number_point - числа
         new_parse_point = copy.copy(self)
         new_parse_point.parse_point_word_list = copy.deepcopy(
@@ -145,7 +145,7 @@ class ParsePoint:
         new_parse_point.child_parse_point = copy.deepcopy(
             self.child_parse_point)
         new_parse_point.parsed = copy.deepcopy(self.parsed)
-        new_parse_point.attempts = self.attempts.copy()
+        new_parse_point.next_word_searcher = self.next_word_searcher.copy()
         new_parse_point.view = copy.deepcopy(self.view)
         return new_parse_point
 
@@ -156,7 +156,7 @@ class ParsePoint:
         new_parse_point.child_parse_point = []
         new_parse_point.count_parsed_words += 1
         new_parse_point.number_point = max_number_point + 1
-        new_parse_point.attempts.create_first(main_pos, main_var)
+        new_parse_point.next_word_searcher.create_first(main_pos, main_var)
         new_parse_point.create_status()
         main_word = new_parse_point.parse_point_word_list[main_pos]
         new_parse_point.view = self.view.create_child_view(new_parse_point,  main_word)
@@ -178,7 +178,7 @@ class ParsePoint:
     def create_child_parse_point(self, max_number_point):
         """create and return new child ParsePoint"""
         print("------")
-        att_res = self.attempts.next()
+        att_res = self.next_word_searcher.next()
         if att_res is None:
             return None
         (main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant) = att_res
@@ -194,7 +194,7 @@ class ParsePoint:
         new_parse_point.parsed.append((main_pp_word_pos, depending_pp_word_pos))
 
         new_parse_point.number_point = max_number_point + 1
-        new_parse_point.attempts.create_child()
+        new_parse_point.next_word_searcher.create_child()
         new_parse_point.create_status()
 
         dep_word = new_parse_point.parse_point_word_list[depending_pp_word_pos]
@@ -206,7 +206,7 @@ class ParsePoint:
 
     def check_end_parse(self):
         """check that all words in this ParsePoint are parsed"""
-        # вроде достаточно проверять self.attempts.flag_end
+        # вроде достаточно проверять self.next_word_searcher.flag_end
         for cur_point_word in self.parse_point_word_list:
             if not cur_point_word.parsed:
                 return False
