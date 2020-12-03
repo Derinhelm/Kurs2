@@ -3,51 +3,52 @@ import xml.dom.minidom
 
 
 class WordFromCorpora:
-    def __init__(self, word_id, dom, feat, word, normalForm):
+    def __init__(self, word_id, dom, feat, word, normal_form, link_type):
         self.id = word_id
         self.dom = dom
         self.feat = feat
         self.word = word
-        self.normalForm = normalForm
+        self.normal_form = normal_form
+        self.link_type = link_type
 
 
-def parseXML(nameFile):
-    doc = xml.dom.minidom.parse(nameFile)
+def parse_xml(name_file):
+    doc = xml.dom.minidom.parse(name_file)
     # а зачем храним id(на всякий случай), вообще-то можно и не хранить, id = index + 1
-    arrayParseSentences = []
+    array_parse_sentences = []
     parent = doc.getElementsByTagName('S')
     index = 1
     for item in parent:
-        newSentence = []
+        new_sentence = []
         for child in item.getElementsByTagName('W'):  # слова с пробелами пока не учитываем
+            (id1, dom, feat, norm_word, link_type) = (child.getAttribute('ID'), child.getAttribute('DOM'),
+                                                 child.getAttribute('FEAT'), child.getAttribute('LEMMA'), child.getAttribute('LINK'))
+            if link_type == '':
+                link_type = None # главное слово, нет связи
             if len(child.childNodes) != 0:
-                (id1, dom, feat, word, normWord) = (child.getAttribute('ID'), child.getAttribute('DOM'),
-                                                    child.getAttribute('FEAT'),
-                                                    child.childNodes[0].nodeValue, child.getAttribute('LEMMA'))
+                word = child.childNodes[0].nodeValue
                 word = word.lower()
             else:
-                (id1, dom, feat, word, normWord) = (child.getAttribute('ID'), child.getAttribute('DOM'),
-                                                    child.getAttribute('FEAT'),
-                                                    None, child.getAttribute('LEMMA'))
-            normWord = normWord.lower()
-            newWord = WordFromCorpora(id1, dom, feat, word, normWord)
-            newSentence.append(newWord)
-        arrayParseSentences.append(newSentence)
+                word = None
+            norm_word = norm_word.lower()
+            new_word = WordFromCorpora(id1, dom, feat, word, norm_word, link_type)
+            new_sentence.append(new_word)
+        array_parse_sentences.append(new_sentence)
         index += 1
-    return arrayParseSentences
+    return array_parse_sentences
 
 
-def insert(nameFile, textTitle, pairsList):
-    arrayParseSentences = parseXML(nameFile)
-    # print(arrayParseSentences)
-    for sentenceNumber in range(len(arrayParseSentences)):
-        curSentence = arrayParseSentences[sentenceNumber]
-        for curWord in curSentence:
-            if curWord.dom != '_root':
-                main_word = curSentence[int(curWord.dom) - 1]
-                newPair = (main_word.word, main_word.normalForm, main_word.feat, curWord.word,
-                                               curWord.normalForm, curWord.feat, textTitle, sentenceNumber + 1)
-                pairsList.append(newPair)
+def insert(name_file, text_title, pairs_list):
+    array_parse_sentences = parse_xml(name_file)
+    # print(array_parse_sentences)
+    for sentence_number in range(len(array_parse_sentences)):
+        cur_sentence = array_parse_sentences[sentence_number]
+        for cur_word in cur_sentence:
+            if cur_word.dom != '_root': #TODO здесь смотрим на типы связей!
+                main_word = cur_sentence[int(cur_word.dom) - 1]
+                new_pair = (main_word.word, main_word.normal_form, main_word.feat, cur_word.word,
+                           cur_word.normal_form, cur_word.feat, text_title, sentence_number + 1)
+                pairs_list.append(new_pair)
 
 
 nameFiles = ['Algoritm.tgt', 'Alpinizm.tgt', 'Andrei_Ashkerov.tgt', 'Anketa.tgt', 'Antiterror.tgt', 'Apraushev.tgt',
@@ -200,14 +201,14 @@ nameFiles = ['Algoritm.tgt', 'Alpinizm.tgt', 'Andrei_Ashkerov.tgt', 'Anketa.tgt'
              'Korp_726.tgt', 'Korrektsiya_mifov.tgt', 'Korrida.tgt', 'Koshki.tgt', 'Kovcheg_Zhana_Vanie.tgt']
 
 if __name__ == '__main__':
-    pairsList = []
+    pairs_list = []
     for i in range(len(nameFiles)):
-        textTitle = nameFiles[i]
+        text_title = nameFiles[i]
         print("---------------------------------")
-        print(i, textTitle)
-        allName = "all/" + textTitle
-        insert(allName, textTitle, pairsList)
-        print(len(pairsList))
+        print(i, text_title)
+        allName = "all/" + text_title
+        insert(allName, text_title, pairs_list)
+        print(len(pairs_list))
 
-    with open('pairsList.pickle', 'wb') as f:
-        pickle.dump(pairsList, f)
+    with open('pairs_list.pickle', 'wb') as f:
+        pickle.dump(pairs_list, f)
