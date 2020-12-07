@@ -61,7 +61,7 @@ def dbFindWord(con, w, cursor):
     return ans[0]
 
 
-def findOrInsertMorphConstraints(m, con, cursor):
+def find_or_insert_morph_constraints(m, con, cursor):
     res = dbFindMorph(con, m, cursor)
     if res:
         return res
@@ -69,7 +69,7 @@ def findOrInsertMorphConstraints(m, con, cursor):
     return res
 
 
-def findOrInsertWord(m, con, cursor):
+def find_or_insert_word(m, con, cursor):
     res = dbFindWord(con, m, cursor)
     if res:
         return res
