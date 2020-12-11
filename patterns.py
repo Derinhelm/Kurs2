@@ -3,7 +3,7 @@ class GPattern:
         self.level = level
         self.main_word = mw
         self.dependent_word = dw
-        self.mark = mark + 50
+        self.mark = mark
         self.main_word_constraints = mc  # массив ограничений на морф
         self.dependent_word_constraints = dc  # массив ограничений на морф
 

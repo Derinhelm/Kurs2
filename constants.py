@@ -46,8 +46,8 @@ cl = {'NOUN': 'noun', 'ADJF': 'adjective', 'ADJS': 'shortadjective', 'COMP': 'co
       'PREP': 'preposition', 'CONJ': 'conjunction', 'PRCL': 'particle',
       'INTJ': 'interjection', 'None': 's_cl_any'}
 # есть в классификации, нет в pymorphy2
-# personalpronoun reflexivepronoun name possesiveadjective pronounadjective numberordinal
-# unpersonalverb frequentativeverb numberone numbertwo numberthree numberbiform
+# personalpronoun+ reflexivepronoun+ name- possesiveadjective- pronounadjective+ numberordinal+
+# unpersonalverb+ frequentativeverb+ numberone+ numbertwo+ numberthree+ numberbiform-
 # parenthesis acronym S_clAny
 anim = {'anim': 'animate', 'inan': 'unanimate', 'None': 'animate_any'}
 gend = {'masc': 'male', 'femn': 'female', 'neut': 'neuter',

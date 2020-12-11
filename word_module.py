@@ -196,3 +196,7 @@ class Word:
 
     def get_all_form_patterns(self):
         return [form.g_patterns for form in self.forms]
+
+    def first_conj_variant(self):
+        '''Возвращает индекс первого союзного варианта разбора, если нет, то None'''
+        return next((ind for (ind, x) in enumerate(self.forms) if x.morph.s_cl == 'conjunction'), None)
