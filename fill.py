@@ -1,10 +1,11 @@
+import os
 import pickle
 
 import psycopg2
 import pymorphy2
 
 from dbFunctions import *
-from word_module import WordForm
+from extract_pairs_of_words import get_pairs
 
 corporaToImpMorph = {'V': 's_cl', 'NUM': 's_cl', 'PR': 's_cl', 'A': 's_cl',
                      'ADV': 's_cl', 'CONJ': 's_cl', 'S': 's_cl', 'PART': 's_cl',
@@ -21,6 +22,10 @@ corporaToImpMorph = {'V': 's_cl', 'NUM': 's_cl', 'PR': 's_cl', 'A': 's_cl',
                      'ПРОШ': 'tense', 'НАСТ': 'tense', 'НЕПРОШ': 'tense', 'ИНФ': 'tense',
                      'ИЗЪЯВ': 'tense', 'ПОВ': 'tense',
                      'СТРАД': 'voice'}
+
+morph_analyzer = pymorphy2.MorphAnalyzer()
+con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                       password='postgres', host='localhost')
 
 
 class DBWordInfo:
@@ -103,6 +108,7 @@ def parse_corpora_tag(tag_corpora):
 
         if cur_param not in ['СЛ', 'COM', 'СМЯГ', 'НЕСТАНД', 'МЕТА', 'НЕПРАВ']:
             imp_features.add(corporaToImpMorph[cur_param])
+    check_funs.append(lambda m: m.s_cl not in ['conjunction', 'particle', 'interjection'])
     if imp_features == set():
         return None  # нет меток, рассматриваемого вида
     return check_funs, imp_features
@@ -126,17 +132,20 @@ def eq_norm_form(s1, s2, parse_s2):
     return False
 
 
-# f = open('mismatch_of_the_initial_form', 'w')
-
-def get_parse_by_pymorphy(cur_word, cur_tag_corpora, cur_normal_form, arr_parse):
-    """return list of pairs (morph, normal form)"""
-    res_parse = parse_corpora_tag(cur_tag_corpora)
+def get_parse_by_pymorphy(cur_word, cur_normal_form, cur_tag_corpora):
+    """return list of pairs (constraint_list, normal_form)"""
+    if cur_word == 'должны':
+        x = 0
+    if not check_word(cur_word):
+        return ()
+    arr_parse = morph_analyzer.parse(cur_word)
+    res_parse = parse_corpora_tag(cur_tag_corpora.split())
     if res_parse is None:  # слово типа NID, 'as-sifr'
-        return None
+        return ()
     (check_funs, imp_features) = res_parse
     # print(cur_word, cur_tag_corpora, cur_normal_form, arr_parse)
     not_imp_feat = set(Morph.names) - imp_features
-    good_parse_pymorphy = []
+    good_parse_pymorphy = ()
     for cur_parse in arr_parse:
         if eq_norm_form(cur_parse.normal_form, cur_normal_form, cur_parse) or \
                 'НЕСТАНД' in cur_tag_corpora or 'НЕПРАВ' in cur_tag_corpora or \
@@ -154,22 +163,9 @@ def get_parse_by_pymorphy(cur_word, cur_tag_corpora, cur_normal_form, arr_parse)
                         break
                 if flag_true_parse:
                     if m not in good_parse_pymorphy:
-                        word_form = WordForm(m, nw, prob)
-                        good_parse_pymorphy += [word_form]
-    return good_parse_pymorphy, not_imp_feat
-
-
-def delete_cpi_from_list(variants_list):
-    """удаляем словосочетания с частицами, союзами, междометиями звательным падежем"""
-    # variants_list - [WordForm]
-    i = 0
-    while i < len(variants_list):
-        if variants_list[i].morph.s_cl in ['conjunction', 'particle', 'interjection'] or \
-                variants_list[i].morph.case_morph == 'vocative':
-            variants_list.pop(i)
-        else:
-            i += 1
-    return variants_list
+                        morph_constraints = create_constraints(m, not_imp_feat)
+                        good_parse_pymorphy += ((morph_constraints, nw, prob),)
+    return good_parse_pymorphy
 
 
 def insert_pattern3(con, cursor, main_morph_number, dep_morph_number,
@@ -241,6 +237,9 @@ def insert_pattern(con, cursor, main_morph_number, main_normal_form_number, dep_
     insert_pattern1(con, cursor, main_morph_number, dep_morph_number, mark)
 
 
+Counter = 0
+
+
 def insert_all_pairs(con, cursor, main_inserts, dep_inserts):
     # массив номеров слова в таблице word(мб несколько в дальнейшем)
     # пока массив из одного элемента
@@ -254,9 +253,12 @@ def insert_all_pairs(con, cursor, main_inserts, dep_inserts):
             main_normal_form_number = cur_main.normal_form_id
             dep_morph_number = cur_dep.constraints_id
             dep_normal_form_number = cur_dep.normal_form_id
-            mark = cur_main.probability * cur_dep.probability / denominator
+            mark = cur_main.probability * cur_dep.probability / denominator  # TODO логарифмировать
             insert_pattern(con, cursor, main_morph_number, main_normal_form_number,
                            dep_morph_number, dep_normal_form_number, mark)
+    if len(main_inserts) == 0 or len(dep_inserts) == 0:
+        global Counter
+        Counter += 1
 
 
 def check_word(word):
@@ -269,70 +271,79 @@ def check_word(word):
     return True
 
 
-def create_constraints(variant, not_imp):
-    variant_constraints_list = []
+def create_constraints(morph, not_imp):
+    variant_constraints = ()
     for attr in Morph.names:
         if attr not in not_imp:
-            val = getattr(variant.morph, attr)
+            val = getattr(morph, attr)
             if val[-4:] != "_any":
-                variant_constraints_list.append((attr, val))
+                variant_constraints += ((attr, val),)
 
-    return variant_constraints_list
-
-
-def create_db_numbers(variants, not_imp):
-    """variant(WordForm) to list of constraints - [(номер ограничения в базе,номер слова)]"""
-    constraints_list = []
-    for variant in variants:
-        cons_list = create_constraints(variant, not_imp)
-        cons_id = find_or_insert_morph_constraints(cons_list, con, cursor)
-        normal_form_id = find_or_insert_word(variant.normal_form, con, cursor)
-
-        # ограничение на нач.форму слова(2 и 3 уровень)
-        constraints_list.append(DBWordInfo(cons_id, normal_form_id, variant.probability))
-    return constraints_list
+    return variant_constraints
 
 
-def insert_pair(cur_pair, morph_analyzer: pymorphy2.MorphAnalyzer, con, cursor):
-    (main_word, main_normal_form, main_feat, dep_word,
-     dep_normal_form, dep_feat, _, _) = cur_pair
-    if (not check_word(main_word)) or (not check_word(dep_word)):
-        return
-    dep_feat = dep_feat.split()
-    main_feat = main_feat.split()
-    dep_res = get_parse_by_pymorphy(dep_word, dep_feat, dep_normal_form, morph_analyzer.parse(dep_word))
-    if dep_res is None:
-        return
-    (dep_variants, dep_not_imp) = dep_res
-    main_res = get_parse_by_pymorphy(main_word, main_feat, main_normal_form,
-                                     morph_analyzer.parse(main_word))
-    if main_res is None:
-        return
-    (main_variants, main_not_imp) = main_res
-    dep_variants = delete_cpi_from_list(dep_variants)
-    main_variants = delete_cpi_from_list(main_variants)
-    if dep_variants == [] or main_variants == []:
-        return
-    dep_constraints_numbers = create_db_numbers(dep_variants, dep_not_imp)
-    main_constraints_numbers = create_db_numbers(main_variants, main_not_imp)
+Corpora_to_pymorphy, Morph_to_db_id, Normal_to_db_id = {}, {}, {}
 
-    insert_all_pairs(con, cursor, main_constraints_numbers, dep_constraints_numbers)
+
+def from_pymorphy_labels_to_db_info(morph_cons_list, normal_form, prob):
+    morph_db_id = Morph_to_db_id[morph_cons_list]
+    normal_form_id = Normal_to_db_id[normal_form]
+    return DBWordInfo(morph_db_id, normal_form_id, prob)
+
+
+def from_corpora_to_db_info(word, normal_form, corpora_feat):
+    pymorphy_labels = Corpora_to_pymorphy[(word, normal_form, corpora_feat)]
+    return list(map(lambda lab: from_pymorphy_labels_to_db_info(*lab), pymorphy_labels))
 
 
 if __name__ == '__main__':
-    # 610944- последняя сделанная в gpatterns_4 610945 - voct
-    # 898384 - последняя в gpatterns
-    morph_analyzer = pymorphy2.MorphAnalyzer()
-    con = psycopg2.connect(dbname='gpatterns', user='postgres',
-                           password='postgres', host='localhost')
-    with open('pairsList.pickle', 'rb') as f:
-        pairsList = pickle.load(f)
-    for i in range(497413, len(pairsList)):
-        print(i)
-        cur_pair = pairsList[i]
-        cursor = con.cursor()
-        insert_pair(cur_pair, morph_analyzer, con, cursor)
-        cursor.close()
+    if "processed_file_index.pickle" not in os.listdir():  # храним первую необработанный
+        text_index = 0
+    else:
+        with open('processed_file_index.pickle', 'rb') as tf:
+            text_index = pickle.load(tf)
+    pair_files = os.listdir("all")
+    first_unproc_file_index = text_index
+    try:  # TODO не убирать для нового файла !
+        for file_ind in range(text_index, len(pair_files)):
+            file_title = pair_files[file_ind]
+            print(file_title)
+            pair_list = get_pairs('all/' + file_title) # получаем список пар слов (не все из них - модели)
+            text_corpora_labels = set()
+            for (mw, mn, mm, dw, dn, dm, _, _) in pair_list:
+                text_corpora_labels.add((mw, mn, mm))
+                text_corpora_labels.add((dw, dn, dm))
+            new_corpora_labels = {word_info: get_parse_by_pymorphy(*word_info)
+                                  for word_info in text_corpora_labels - Corpora_to_pymorphy.items()}
+            Corpora_to_pymorphy.update(new_corpora_labels)
+            morph_constrations = set()
+            normal_forms = set()
+            for (m, nf, prob) in [e for lst in Corpora_to_pymorphy.values() for e in lst]:
+                morph_constrations.add(m)
+                normal_forms.add(nf)
+            print("Corpora_to_pymorphy dict end")
+            cursor = con.cursor()
+            Morph_to_db_id.update({cons_lst: find_or_insert_morph_constraints(cons_lst, con, cursor)
+                                   for cons_lst in morph_constrations - Morph_to_db_id.items()})
+            print("Morph_to_db_id end")
+            Normal_to_db_id.update({nf: find_or_insert_word(nf, con, cursor)
+                                    for nf in normal_forms - Normal_to_db_id.items()})
+            print("Normal_to_db_id end")
+            i = 0
+            pair_len = len(pair_list)
+            for (mw, mn, mm, dw, dn, dm, _, _) in pair_list:
+                insert_all_pairs(con, cursor, from_corpora_to_db_info(mw, mn, mm), from_corpora_to_db_info(dw, dn, dm))
+                if i % 100 == 0:
+                    print(i, pair_len, sep=" / ")
+                i += 1
+            print("not gp:", Counter, "/", pair_len )
+            Counter = 0
+            cursor.close()
+        first_unproc_file_index += 1
+    except Exception as exc:
+        print(exc)
+        with open('processed_file_index.pickle', 'wb') as f:
+            pickle.dump(first_unproc_file_index, f)
 
 '''file_name = 'tests/sochin.txt'
 cur_pair_list = []
@@ -354,3 +365,6 @@ if __name__ == '__main__':
     with open('pairs_list.pickle', 'wb') as f:
         pickle.dump(pairs_list, f)
 '''
+'''Больше словарей! словарь (грам.слово, лексема) -> [morph_id], lexema_id нач. форма одна, морфологий мб несколько'''
+'''учет вероятностей самого разбора'''
+'''у некоторых слов будет все плохо (например, у частиц, союзов)'''

@@ -74,14 +74,14 @@ def is_gpattern(dep_word, main_word):
     return True
 
 
-def insert(name_file, text_title):
+def get_pairs(file_title):
     '''Вставка....
 >>> print(1)
 1
 
     '''
     cur_text_pair_list = []
-    parsed_sentence_list = parse_xml(name_file)
+    parsed_sentence_list = parse_xml(file_title)
     for sentence_number in range(len(parsed_sentence_list)):
         cur_sentence, child_parent_dict = parsed_sentence_list[sentence_number]
         dep_main_word_dict = {}  # ключ - номер зависимого слова, значение - номер главного слова
@@ -100,7 +100,7 @@ def insert(name_file, text_title):
                 main_word = cur_sentence[main_word_number]
                 if is_gpattern(cur_word, main_word):
                     new_pair = (main_word.word, main_word.normal_form, main_word.feat, cur_word.word,
-                                cur_word.normal_form, cur_word.feat, text_title, sentence_number + 1)
+                                cur_word.normal_form, cur_word.feat, file_title, sentence_number + 1)
                     cur_text_pair_list.append(new_pair)
     return cur_text_pair_list
 
@@ -110,6 +110,7 @@ cur_pair_list = []
 cur_pair_list = insert(file_name, file_name)
 print(*cur_pair_list, sep="\n")
 x = 0
+'''
 '''
 if __name__ == '__main__':
     pairs_list = []
@@ -122,4 +123,4 @@ if __name__ == '__main__':
         pairs_list += cur_pair_list
         print(len(pairs_list))
         with open('pairs/' + text_title + '.pickle', 'wb') as f:
-            pickle.dump(pairs_list, f)
+            pickle.dump(pairs_list, f)'''
