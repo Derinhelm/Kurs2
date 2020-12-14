@@ -7,7 +7,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QDesktopWidget, QHeaderView,
                              QApplication, QLabel, QGridLayout, QVBoxLayout, QPushButton, QLineEdit, QTableWidget,
                              QTableWidgetItem, QScrollArea)
-
+import os
 from main import parse
 
 
@@ -110,7 +110,8 @@ class ResWindow(QWidget):
                 lbl = QLabel(self)
                 lbl.setPixmap(QPixmap(t))
                 grid.addWidget(lbl, number_res, number_column)
-                # os.remove(t)
+
+                os.remove(t + ".png")
 
                 number_column += 1
                 self.point_button.append(QPushButton("Визуализировать точку разбора"))
