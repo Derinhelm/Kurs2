@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QDesktopWidget, QHeaderView, QApplication, QLabel, QGridLayout,
                              QVBoxLayout, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem)
 
-from functions import get_patterns_pandas
+from analyzer.functions import get_patterns_pandas
 
 
 class EndWindow(QWidget):

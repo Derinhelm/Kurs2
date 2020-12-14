@@ -1,4 +1,4 @@
-from word_module import Morph
+from analyzer.word_module import Morph
 def dbInsertWord(con, w, cursor):
     # возвращает индекс, вставленного слова
     cursor.execute('INSERT INTO word VALUES(DEFAULT,%s) RETURNING id;', (w,))

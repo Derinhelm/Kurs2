@@ -4,8 +4,8 @@ import pickle
 import psycopg2
 import pymorphy2
 
-from dbFunctions import *
-from extract_pairs_of_words import get_pairs
+from corpora_filling.db_functions import *
+from corpora_filling.extract_pairs_of_words import get_pairs
 
 corporaToImpMorph = {'V': 's_cl', 'NUM': 's_cl', 'PR': 's_cl', 'A': 's_cl',
                      'ADV': 's_cl', 'CONJ': 's_cl', 'S': 's_cl', 'PART': 's_cl',

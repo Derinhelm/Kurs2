@@ -8,10 +8,10 @@ import psycopg2
 import pymorphy2
 import re
 
-from next_word_search_module import NextWordSearcher
-from patterns import GPattern
-from visualize import ParsePointView, ParsePointTreeView
-from word_module import Word
+from analyzer.next_word_search_module import NextWordSearcher
+from analyzer.patterns import GPattern
+from analyzer.visualize import ParsePointView, ParsePointTreeView
+from analyzer.word_module import Word
 
 
 class Gp:

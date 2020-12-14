@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QDesktopWidget, QHeaderView,
                              QApplication, QLabel, QGridLayout, QVBoxLayout, QPushButton, QLineEdit, QTableWidget,
                              QTableWidgetItem, QScrollArea)
 import os
-from main import parse
+from analyzer.main import parse
 
 
 class BeginWindow(QWidget):
