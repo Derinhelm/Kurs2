@@ -120,8 +120,8 @@ class ParsePointView:
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
         plt.ylim(y_min - y_margin, y_max + y_margin)
-        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
-                verticalalignment='top', font_size=12)
+        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=500, node_color='w',
+                horizontalalignment='center', verticalalignment='center', font_size=12)
         plt.title(self.sent_title)
 
         t = '_' + str(number_windows)
@@ -146,8 +146,8 @@ class ParsePointView:
         fig.canvas.mpl_connect('button_press_event', lambda event: self.on_mouse_click_parse_point(event, pos))
         #nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
         #        verticalalignment='top', font_size=20)
-        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=200, node_color='w',
-                horizontalalignment='center', verticalalignment='top', font_size=20)
+        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1000, node_color='w',
+                horizontalalignment='center', verticalalignment='center', font_size=20)
         plt.title(self.sent_title, fontsize=14)
         plt.gcf().canvas.set_window_title("Точка разбора")
         fig.canvas.draw_idle()
@@ -173,14 +173,14 @@ class ParsePointView:
         '''В визуализации создаем узлы для однородных'''
         num = 1
         for main, h in homogeneous_nodes:
-            hom_lab = 'Однор.' + str(num)
-            self.graph.add_node(hom_lab)
+            self.graph.add_node(h.title)
             num += 1
             main_title = main.word.word_text
-            for c in list(self.graph.successors(main_title)):
-                self.graph.add_edge(hom_lab, c)
-                self.graph.remove_edge(main_title, c)
-            self.graph.add_edge(main_title, hom_lab)
+            for c in h.words:
+                dep_title = c.dep_word.word.word_text
+                self.graph.add_edge(h.title, dep_title)
+                self.graph.remove_edge(main_title, dep_title)
+            self.graph.add_edge(main_title, h.title)
 
 
 class ParsePointTreeView:

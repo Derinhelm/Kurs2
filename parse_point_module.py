@@ -1,11 +1,12 @@
 import copy
 import sys
-from timeit import default_timer as timer  # toDO
+from timeit import default_timer as timer
 from itertools import groupby
 
 
 import psycopg2
 import pymorphy2
+import re
 
 from next_word_search_module import NextWordSearcher
 from patterns import GPattern
@@ -33,6 +34,12 @@ class WordInSentence:
         if self.parsed:
             return self.word.word_text + ": " + self.get_morph().__repr__()
         return "not_parsed"
+
+    def __eq__(self, other):
+        return self.number_in_sentence == other.number_in_sentence
+
+    def __hash__(self):
+        return self.number_in_sentence
 
     def fix_morph_variant(self, variant_position: int):
         """слово становится разобранным"""
@@ -88,14 +95,15 @@ class WordInSentence:
 
 
 class HomogeneousGroup:
-    def __init__(self, words: WordInSentence):
+    def __init__(self, words: WordInSentence, title):
         self.words = words
-        self.type = "easy"
+        self.title = title
 
 class ParsePoint:
     direct_for_is_applicable = 1
 
-    def __init__(self, word_list, con, morph_analyzer, sent_title):
+    def __init__(self, word_list, con, morph_analyzer, sent_title, punctuations_ind):
+        self.punctuations_ind = punctuations_ind
         self.pp_words = []
         self.potential_conjs = set()
         for number in range(len(word_list)):
@@ -171,6 +179,7 @@ class ParsePoint:
         # надо писать вручную из-за next_word_searcher.copy
         # number_point - число
         new_parse_point = copy.copy(self)
+        new_parse_point.punctuations_ind = self.punctuations_ind # неглубокое, тк пунктуация общая
         new_parse_point.pp_words = copy.deepcopy(
             self.pp_words)
         new_parse_point.child_parse_point = copy.deepcopy(
@@ -279,15 +288,47 @@ class ParsePoint:
                                 return True
         return False
 
+    def find_descendants(self):
+        descendants = {}
+        for main in self.pp_words:
+            descendants[main] = set(map(lambda x:x.dep_word, main.used_gp))
+        changes = -1
+        while changes != 0:
+            changes = 0
+            for node in descendants:
+                old_count = len(descendants[node])
+                for d in list(descendants[node]):
+                    descendants[node] |= descendants[d]
+                changes += len(descendants[node]) - old_count
+        return descendants
+
+    def create_homogeneous_title(self, homogeneous, descendants):
+        words = [w.word.word_text for w in self.pp_words]
+        for ind in range(len(homogeneous)):
+            h = homogeneous[ind].dep_word
+            for d in descendants[h]:
+                words[d.number_in_sentence] = str(ind)
+            words[h.number_in_sentence] = str(ind)
+        title = ''
+        for i in range(len(words)):
+            title += words[i]
+            if i in self.punctuations_ind:
+                title += self.punctuations_ind[i]
+            else:
+                title += " "
+        return re.match('\D*(\d.*\d)\D*', title).groups()[0]
+
     def merge_homogeneous(self):
+        descendants = self.find_descendants()
         comp_fun = lambda x: x.get_used_variant().morph.get_homogeneous_params()
         new_used_gp = []
         homogeneous_nodes = []
         for main in self.pp_words:
             for key, group_items in groupby(sorted(main.used_gp, key = comp_fun), key = comp_fun):
-                group_items_list = list(group_items)
+                group_items_list = sorted(list(group_items), key = lambda x: x.dep_word.number_in_sentence)
                 if len(group_items_list) > 1:
-                    h = HomogeneousGroup(group_items_list)
+                    title = self.create_homogeneous_title(group_items_list, descendants)
+                    h = HomogeneousGroup(group_items_list, title)
                     new_used_gp.append(h)
                     homogeneous_nodes.append((main, h))
                 else:
@@ -301,13 +342,14 @@ class Sentence:
         self.best_parse_points = []  # хранится список точек разбора, упорядоченных по убыванию оценки
         self.max_number_parse_point = 0
 
-        word_list, sent_title = self.split_string(input_str)
+        word_list, sent_title, punctuatuon_ind = self.split_string(input_str)
         self.sent_title_numb = sent_title
         self.sent_title_without_numb = input_str
+        self.punctuatuon_ind = punctuatuon_ind # индексы,
         con = psycopg2.connect(dbname='gpatterns_copy', user='postgres',
                                password='postgres', host='localhost')
         morph_analyzer = pymorphy2.MorphAnalyzer()
-        self.root_p_p = ParsePoint(word_list, con, morph_analyzer, self.sent_title_without_numb)
+        self.root_p_p = ParsePoint(word_list, con, morph_analyzer, self.sent_title_without_numb, self.punctuatuon_ind)
         self.view = ParsePointTreeView(self.sent_title_numb, self.root_p_p.view)
         self.create_first_parse_points()
         con.close()
@@ -320,6 +362,7 @@ class Sentence:
         #: ; " ' началом предложения, запятой, (   ) тире вообще не учитываем(оно отделено пробелами),
         # дефис только в словах очень-очень и тп,
         punctuation = [' ', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
+        punct_indexes = {}
         cur_word = ""
         word_list = []
         for i in range(len(input_str)):
@@ -329,6 +372,8 @@ class Sentence:
                 # (cur_symbol == '.' ... - точка, но не сокращение
                 if len(cur_word) != 0:
                     word_list.append(cur_word.lower())
+                    if cur_symbol != ' ':
+                        punct_indexes[len(word_list) - 1] = cur_symbol
                     cur_word = ""
             elif cur_symbol != '-' or (len(cur_word) != 0):  # - и непустое слово -  это дефис
                 cur_word = cur_word + cur_symbol
@@ -338,7 +383,7 @@ class Sentence:
         s = ""
         for i in range(len(word_list)):
             s += word_list[i] + "_" + str(i) + " "
-        return word_list, s[:-1] + input_str[-1]
+        return word_list, s[:-1] + input_str[-1], punct_indexes
 
     def create_first_parse_points(self):
 

@@ -171,6 +171,7 @@ class WordForm:
         self.g_patterns += cur_third
         self.g_patterns += cur_sec
         self.g_patterns += cur_first
+        print(len(self.g_patterns))
         return
 
     def get_patterns(self):
