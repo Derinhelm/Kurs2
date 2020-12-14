@@ -1,6 +1,8 @@
 import copy
 import sys
 from timeit import default_timer as timer  # toDO
+from itertools import groupby
+
 
 import psycopg2
 import pymorphy2
@@ -16,6 +18,8 @@ class Gp:
         self.model = mod
         self.dep_word = dw
 
+    def get_used_variant(self):# -> WordForm:
+        return self.dep_word.word.forms[self.dep_word.used_morph_answer]
 
 class WordInSentence:
     def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text: str, number):
@@ -82,6 +86,11 @@ class WordInSentence:
         new_gp = Gp(pattern, dep_word)
         self.used_gp.append(new_gp)
 
+
+class HomogeneousGroup:
+    def __init__(self, words: WordInSentence):
+        self.words = words
+        self.type = "easy"
 
 class ParsePoint:
     direct_for_is_applicable = 1
@@ -270,6 +279,22 @@ class ParsePoint:
                                 return True
         return False
 
+    def merge_homogeneous(self):
+        comp_fun = lambda x: x.get_used_variant().morph.get_homogeneous_params()
+        new_used_gp = []
+        homogeneous_nodes = []
+        for main in self.pp_words:
+            for key, group_items in groupby(sorted(main.used_gp, key = comp_fun), key = comp_fun):
+                group_items_list = list(group_items)
+                if len(group_items_list) > 1:
+                    h = HomogeneousGroup(group_items_list)
+                    new_used_gp.append(h)
+                    homogeneous_nodes.append((main, h))
+                else:
+                    new_used_gp.append(group_items_list)
+        main.used_gp = new_used_gp
+        return homogeneous_nodes
+
 
 class Sentence:
     def __init__(self, input_str):
@@ -375,6 +400,9 @@ class Sentence:
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
                 if new_point.status == 'right' or new_point.status == 'right_with_conjs':
                     print(new_point.status)
+                    if new_point.status == 'right_with_conjs':
+                        homogeneous_nodes = new_point.merge_homogeneous()
+                        new_point.view.merge_homogeneous(homogeneous_nodes)
                     return new_point
                 else:
                     self.insert_new_parse_point(new_point)

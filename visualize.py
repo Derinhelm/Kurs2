@@ -169,6 +169,19 @@ class ParsePointView:
             number_word = int(near_word[word_border + 1:])
             self.words_view[number_word].visualize()
 
+    def merge_homogeneous(self, homogeneous_nodes):
+        '''В визуализации создаем узлы для однородных'''
+        num = 1
+        for main, h in homogeneous_nodes:
+            hom_lab = 'Однор.' + str(num)
+            self.graph.add_node(hom_lab)
+            num += 1
+            main_title = main.word.word_text
+            for c in list(self.graph.successors(main_title)):
+                self.graph.add_edge(hom_lab, c)
+                self.graph.remove_edge(main_title, c)
+            self.graph.add_edge(main_title, hom_lab)
+
 
 class ParsePointTreeView:
     def __init__(self, title, root_view):

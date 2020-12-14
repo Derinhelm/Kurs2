@@ -145,6 +145,9 @@ class Morph:  # для хранения морфологических хара�
     def is_nominative(self):
         return self.case_morph == 'nominative'
 
+    def get_homogeneous_params(self):
+        return (self.s_cl, self.case_morph, self.prep_type)
+
 class WordForm:
     def __init__(self, morph: Morph, normal_form, prob):
         self.normal_form = normal_form
