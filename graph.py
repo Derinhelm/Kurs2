@@ -100,15 +100,15 @@ class ResWindow(QWidget):
                 # text_title = QLabel(s)
 
                 # text_title.setWordWrap(True)
-                table.setFont(PyQt5.QtGui.QFont("Times", 18, PyQt5.QtGui.QFont.Times))
+                table.setFont(PyQt5.QtGui.QFont("Times", 16, PyQt5.QtGui.QFont.Times))
                 # table.setFixedSize(len(t) * 100, 2 * 100)
+                table.setFixedHeight(500)
                 grid.addWidget(table, number_res, number_column)
 
                 number_column += 1
                 t = point.easy_visualize()
                 lbl = QLabel(self)
                 lbl.setPixmap(QPixmap(t))
-                # lbl.setFixedWidth(500)
                 grid.addWidget(lbl, number_res, number_column)
                 # os.remove(t)
 

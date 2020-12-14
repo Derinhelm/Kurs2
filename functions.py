@@ -127,6 +127,7 @@ def get_patterns_pandas(cursor, level, main_morph_params=None, dep_morph_params=
     for column in df.columns:
         if (df[column] == 'not_imp').all():
             df.drop(column, axis='columns', inplace=True)
+    df['mark'] = [round(n, 2) for n in df['mark']]
     return df
 
 
@@ -134,8 +135,8 @@ def get_patterns(cursor, level, main_morph_params=None, dep_morph_params=None, m
                  dep_word_param=None):
     where, params = create_where(False, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
     command = create_command(level, where)
-    print(command)
-    print(params)
+    #print(command)
+    #print(params)
     cursor.execute(command, params)
     res = cursor.fetchall()
     patterns_list = []
@@ -150,5 +151,9 @@ def get_patterns(cursor, level, main_morph_params=None, dep_morph_params=None, m
                 dep_constr.append(pattern[i])
         new_pattern = GPattern(level, pattern[0], pattern[1], pattern[2],
                                main_constr, dep_constr)
-        patterns_list.append(new_pattern)
+        # toDO
+        if 'preposition' in new_pattern.main_word_constraints and 'adverb' in new_pattern.dependent_word_constraints:
+            print("prep + adverb")
+        else:
+            patterns_list.append(new_pattern)
     return patterns_list

@@ -98,6 +98,7 @@ class DepWordSeacher:
             self.pos_variants_dict[word_pos].sort()
         self.left_word_pos = cur_main
         self.right_word_pos = cur_main
+        self.main_pos = cur_main
         self.set_next_left()
         self.set_next_right()
         if self.right_word_pos is not None:
@@ -123,27 +124,33 @@ class DepWordSeacher:
         if self.right_word:
             #рассматривали слово справа
             self.set_next_right()
-            if self.left_word_pos is not None:
-                self.cur_word_pos = self.left_word_pos
-                self.right_word = False
-            else:
-                if self.right_word_pos is not None:
-                    self.cur_word_pos = self.right_word_pos
-                    self.right_word = True
-                else:
-                    self.flag_dep_end = True
         else:
             #рассматривали слово слева
             self.set_next_left()
-            if self.right_word_pos is not None:
+        if self.flag_dep_end: # self.left_word_pos = right_word_pos = None
+            return
+        if self.left_word_pos is None:
+            self.cur_word_pos = self.right_word_pos
+            self.right_word = True
+        elif self.right_word_pos is None:
+            self.cur_word_pos = self.left_word_pos
+            self.right_word = False
+        else:
+            left_dist = self.main_pos - self.left_word_pos
+            right_dist = self.right_word_pos - self.main_pos
+            if left_dist > right_dist:
                 self.cur_word_pos = self.right_word_pos
                 self.right_word = True
-            else:
-                if self.left_word_pos is not None:
+            elif left_dist < right_dist:
+                self.cur_word_pos = self.left_word_pos
+                self.right_word = False
+            else: # right_dist = left_dist
+                if self.right_word:
                     self.cur_word_pos = self.left_word_pos
                     self.right_word = False
                 else:
-                    self.flag_dep_end = True
+                    self.cur_word_pos = self.right_word_pos
+                    self.right_word = True
 
     def set_next_right(self):
         if self.right_word_pos is None:
@@ -186,21 +193,21 @@ class DepWordSeacher:
         return self.flag_dep_end
 
 class MorphInfo:
-    def __init__(self, parse_point_word_list):
+    def __init__(self, pp_words):
         # список вида [[модели управления]],
         # для каждого варианта разбора каждого слова храним его возможные модели управления
         # j элементе i элемента all_patterns_list - список моделей управления для j варианта разбора i слова
         # word - WordInSentence, надо перевызывать
         self.all_patterns_list = [word.word.get_all_form_patterns() for word in
-                                  parse_point_word_list]  # для дальнешего извлечения моделей
+                                  pp_words]  # для дальнешего извлечения моделей
 
         self.morph_position_dict = {}
         # ключ - морф.характеристика, значение - set из пар (позиция слова, номер варианта разбора)
 
         self.word_position_dict = {}
         # ключ - нач.форма слова, значение - set из пар (позиция слова, номер варианта разбора)
-        for word_position in range(len(parse_point_word_list)):
-            word = parse_point_word_list[word_position].word
+        for word_position in range(len(pp_words)):
+            word = pp_words[word_position].word
             for form_position in range(len(word.forms)):
                 form = word.forms[form_position]
                 for cur_param in form.morph.get_imp():
@@ -232,19 +239,19 @@ class MorphInfo:
         return self.all_patterns_list[word_pos][word_variant]
 
 class NextWordSearcher:
-    def __init__(self, parse_point_word_list):
+    def __init__(self, pp_words):
 
 
         self.word_variants_list = []  # список, в какой позиции, какой вариант мб
         # список неразобранных словоформ [(номер слова, номер варианта)]
 
-        for i in range(len(parse_point_word_list)):
-            self.word_variants_list += [(i, j) for j in range(len(parse_point_word_list[i].word.forms))]
+        for i in range(len(pp_words)):
+            self.word_variants_list += [(i, j) for j in range(len(pp_words[i].word.forms))]
 
-        self.morph_info = MorphInfo(parse_point_word_list)
+        self.morph_info = MorphInfo(pp_words)
 
 
-        self.len_sent = len(parse_point_word_list)
+        self.len_sent = len(pp_words)
 
         self.main_pattern_list = []
         # список вида [(главное слово, модель управления)]

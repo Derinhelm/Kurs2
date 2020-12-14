@@ -19,6 +19,7 @@ class ParsePointWordView:
         plt.figure(number_windows, figsize=(0.5 + 0.12 * len(self.text), 0.5))
         plt.axis('off')
         plt.text(0, 0.5, self.text, size=15)
+        plt.gcf().canvas.set_window_title("Слово")
         plt.show()
 
     def set_text(self, text):
@@ -60,6 +61,7 @@ class PatternView:
         #plt.figure(number_windows)
         plt.axis('off')
         plt.text(0, 0, self.text, size=15, horizontalalignment='left', verticalalignment='bottom')
+        plt.gcf().canvas.set_window_title("Модель управление")
         plt.show()
 
     def set_text(self, text):
@@ -87,13 +89,16 @@ class ParsePointView:
         child.point_title = str(new_point)
         child.point_label = str(new_point.number_point)
         child.status = new_point.status
-        main_title = main_word.word.word_text + "_" + str(main_word.number_in_sentence)
+        main_title = main_word.word.word_text
+        #main_title = main_word.word.word_text + "_" + str(main_word.number_in_sentence)
         if dep_word is None:
             # первая для разбора точка
             child.graph.add_node(main_title)
             child.change_word_view(main_word.number_in_sentence, main_word.get_form().__repr__())
         else:
-            dep_title = dep_word.word.word_text + "_" + str(dep_word.number_in_sentence)
+            #dep_title = dep_word.word.word_text + "_" + str(dep_word.number_in_sentence)
+            dep_title = dep_word.word.word_text
+
             child.graph.add_node(dep_title)
             child.graph.add_edge(main_title, dep_title)
             child.change_word_view(dep_word.number_in_sentence, dep_word.get_form().__repr__())
@@ -139,9 +144,12 @@ class ParsePointView:
         y_margin = (y_max - y_min) * 0.25
         plt.ylim(y_min - y_margin, y_max + y_margin)
         fig.canvas.mpl_connect('button_press_event', lambda event: self.on_mouse_click_parse_point(event, pos))
-        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
-                verticalalignment='top', font_size=12)
-        plt.title(self.sent_title)
+        #nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
+        #        verticalalignment='top', font_size=20)
+        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=200, node_color='w',
+                horizontalalignment='center', verticalalignment='top', font_size=20)
+        plt.title(self.sent_title, fontsize=14)
+        plt.gcf().canvas.set_window_title("Точка разбора")
         fig.canvas.draw_idle()
         plt.show()
 
@@ -160,6 +168,19 @@ class ParsePointView:
             word_border = near_word.rfind('_')
             number_word = int(near_word[word_border + 1:])
             self.words_view[number_word].visualize()
+
+    def merge_homogeneous(self, homogeneous_nodes):
+        '''В визуализации создаем узлы для однородных'''
+        num = 1
+        for main, h in homogeneous_nodes:
+            hom_lab = 'Однор.' + str(num)
+            self.graph.add_node(hom_lab)
+            num += 1
+            main_title = main.word.word_text
+            for c in list(self.graph.successors(main_title)):
+                self.graph.add_edge(hom_lab, c)
+                self.graph.remove_edge(main_title, c)
+            self.graph.add_edge(main_title, hom_lab)
 
 
 class ParsePointTreeView:
@@ -180,6 +201,8 @@ class ParsePointTreeView:
             v_color = 'green'
         elif child_view.status == 'intermediate-close':
             v_color = 'orange'
+        elif child_view.status == 'right_with_conjs':
+            v_color = 'yellow'
         else:
             v_color = 'black'
         self.graph.add_node(child_view.point_label, color = v_color)
@@ -197,10 +220,12 @@ class ParsePointTreeView:
                 e_color = 'lightblue'
 
         if word_pair_text is None:
-            self.graph.add_edge(parent_view.point_label, child_view.point_label, n="first word", lev = lev, color = e_color)
+            self.graph.add_edge(parent_view.point_label, child_view.point_label, n="Разбор первого слова", lev = lev, color = e_color)
+            #self.graph.add_edge(parent_view.point_label, child_view.point_label, n="", lev = lev, color = e_color)
             self.dict_patterns[(parent_view.point_label, child_view.point_label)] = PatternView()
         else:
             self.graph.add_edge(parent_view.point_label, child_view.point_label, n=word_pair_text, lev = lev, color = e_color)
+            #self.graph.add_edge(parent_view.point_label, child_view.point_label, n="", lev = lev, color = e_color)
             self.dict_patterns[(parent_view.point_label, child_view.point_label)] = PatternView(pattern)
         self.dict_parse_points[child_view.point_label] = child_view
         self.edge_colors.append(e_color)
@@ -276,6 +301,7 @@ class ParsePointTreeView:
                 pattern_view = self.dict_patterns[near_edge]
                 pattern_view.visualize()
                 print(near_edge)
+                print(pattern_view.text)
                 #event.key = None
                 plt.show()
 
@@ -305,10 +331,16 @@ class ParsePointTreeView:
         color_n = nx.get_node_attributes(self.graph, 'color')
         for node in self.graph.nodes():
             nodecolors.append(color_n[node])
-        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=600, horizontalalignment='center', edge_color = edge_colors,
-                verticalalignment='top', font_size=10, font_color='black', node_color='white', edgecolors = nodecolors, edgewidth = 8)
+        #nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=600, horizontalalignment='center', edge_color = edge_colors,
+        #        verticalalignment='top', font_size=10, font_color='black', node_color='white', edgecolors = nodecolors, edgewidth = 8)
+        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=900, horizontalalignment='center',
+                edge_color=edge_colors, verticalalignment='top', font_size=13, font_color='black', node_color='white', edgecolors=nodecolors,
+                edgewidth=8)
         grafo_labels = nx.get_edge_attributes(self.graph, 'n')
-        nx.draw_networkx_edge_labels(self.graph, pos, font_size=10, edge_labels=grafo_labels, label_pos=0.3,
+        #nx.draw_networkx_edge_labels(self.graph, pos, font_size=10, edge_labels=grafo_labels, label_pos=0.3,
+        #                             rotate=False)
+        nx.draw_networkx_edge_labels(self.graph, pos, font_size=12, edge_labels=grafo_labels, label_pos=0.5,
                                      rotate=False)
         plt.title(self.title)
+        plt.gcf().canvas.set_window_title("Дерево точек разбора")
         plt.show()

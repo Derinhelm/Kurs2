@@ -7,11 +7,13 @@ def parse(str1, count = 1):
     s = Sentence(str1)
     ans = []
     for i in range(count):
-        print("------------------------------------------------------", i)
+        #print("------------------------------------------------------", i)
         res = s.sint_parse()
         if res is None:
             ans.append((None, None, s.view))
             break
+        if res == "timeEnd":
+            break
         trace_view_copy = copy.deepcopy(s.view)
-        ans.append((res.parse_point_word_list, res.view, trace_view_copy))
+        ans.append((res.pp_words, res.view, trace_view_copy))
     return ans

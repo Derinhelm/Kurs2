@@ -1,18 +1,25 @@
 import copy
 import sys
+from timeit import default_timer as timer  # toDO
+from itertools import groupby
+
+
+import psycopg2
+import pymorphy2
 
 from next_word_search_module import NextWordSearcher
 from patterns import GPattern
 from visualize import ParsePointView, ParsePointTreeView
-import psycopg2
-import pymorphy2
 from word_module import Word
+
 
 class Gp:
     def __init__(self, mod, dw):
         self.model = mod
         self.dep_word = dw
 
+    def get_used_variant(self):# -> WordForm:
+        return self.dep_word.word.forms[self.dep_word.used_morph_answer]
 
 class WordInSentence:
     def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text: str, number):
@@ -80,25 +87,32 @@ class WordInSentence:
         self.used_gp.append(new_gp)
 
 
+class HomogeneousGroup:
+    def __init__(self, words: WordInSentence):
+        self.words = words
+        self.type = "easy"
+
 class ParsePoint:
     direct_for_is_applicable = 1
 
     def __init__(self, word_list, con, morph_analyzer, sent_title):
-        self.parse_point_word_list = []
+        self.pp_words = []
+        self.potential_conjs = set()
         for number in range(len(word_list)):
             word_text = word_list[number]
             cur_parse_point_word = WordInSentence(con, morph_analyzer, word_text, number)
-            self.parse_point_word_list.append(cur_parse_point_word)
+            if cur_parse_point_word.word.first_conj_variant() is not None:  # у слова есть вариант разбора - союз
+                self.potential_conjs.add(number)
+            self.pp_words.append(cur_parse_point_word)
 
         self.child_parse_point = []
-        self.count_parsed_words = 0
         self.parsed = []
         self.number_point = 0
         self.status = 'intermediate'
+        self.parsed_words = set()
 
-
-        self.next_word_searcher = NextWordSearcher(self.parse_point_word_list)
-        self.view = ParsePointView('root', sent_title, len(self.parse_point_word_list))
+        self.next_word_searcher = NextWordSearcher(self.pp_words)
+        self.view = ParsePointView('root', sent_title, len(self.pp_words))
 
     def __repr__(self):
         ans = str(self.number_point) + ":"
@@ -108,15 +122,15 @@ class ParsePoint:
 
     def index(self, word1):
         # ищет в списке слов в данной точке разбора индекс данного слова(класса Word), вспомогательная функция
-        for i in range(len(self.parse_point_word_list)):
-            if self.parse_point_word_list[i].word == word1:
+        for i in range(len(self.pp_words)):
+            if self.pp_words[i].word == word1:
                 return i
         return None
 
     @staticmethod
     def check_inderect_dependency(self, number_main, number_dep):
-        # dep_word = self.parse_point_word_list[number_dep]
-        # main_word = self.parse_point_word_list[number_main]
+        # dep_word = self.pp_words[number_dep]
+        # main_word = self.pp_words[number_main]
         return True  # toDo ПЕРЕПИСАТЬ!!!!
 
     @staticmethod
@@ -124,49 +138,68 @@ class ParsePoint:
         return True  # toDo ПЕРЕПИСАТЬ!!!!!
 
     def create_status(self):
-        if self.check_end_parse():
-            if self.check_prep() and not self.verb_has_homogeneous_subject():
+        parsed_word_count = len(self.parsed_words)
+        if parsed_word_count == len(self.pp_words):  # все слова разобраны
+            # self.check_end_parse():
+            if self.check_prep():
                 self.status = 'right'
             else:
                 self.status = 'wrong'
         else:
-            self.status = 'intermediate'
+            unparsed_conjs = self.potential_conjs - self.parsed_words
+            if len(unparsed_conjs) + parsed_word_count == len(self.pp_words):
+                self.status = 'right_with_conjs'
+                self.parse_conj()
+            else:
+                self.status = 'intermediate'
+
+    def parse_conj(self):
+        '''TODO Неразобранными остались только потенциальные союзы.
+            Для каждого пот.союза создаем все возможные точки разбора, в которых он союз +
+            точку разбора со всеми возможными несоюзными вариантами '''
+        # Сейчас закрепляем первый союзный вариант разбора
+        for conj_ind in self.potential_conjs - self.parsed_words:
+            self.pp_words[conj_ind].fix_morph_variant(self.pp_words[conj_ind].word.first_conj_variant())
+
 
     def close(self):
         self.status = 'intermediate-close'
 
+
     def copy(self):
         """create copy of ParsePoint"""
         # надо писать вручную из-за next_word_searcher.copy
-        # count_parsed_words, number_point - числа
+        # number_point - число
         new_parse_point = copy.copy(self)
-        new_parse_point.parse_point_word_list = copy.deepcopy(
-            self.parse_point_word_list)
+        new_parse_point.pp_words = copy.deepcopy(
+            self.pp_words)
         new_parse_point.child_parse_point = copy.deepcopy(
             self.child_parse_point)
         new_parse_point.parsed = copy.deepcopy(self.parsed)
         new_parse_point.next_word_searcher = self.next_word_searcher.copy()
         new_parse_point.view = copy.deepcopy(self.view)
+        new_parse_point.parsed_words = copy.deepcopy(self.parsed_words)
+        new_parse_point.potential_conjs = copy.deepcopy(self.potential_conjs)
         return new_parse_point
 
     def create_firsts_pp(self, main_pos, main_var, max_number_point):
         new_parse_point = self.copy()
-        new_parse_point.parse_point_word_list[main_pos].fix_morph_variant(main_var)
+        new_parse_point.pp_words[main_pos].fix_morph_variant(main_var)
 
         new_parse_point.child_parse_point = []
-        new_parse_point.count_parsed_words += 1
+        new_parse_point.parsed_words.add(main_pos)
         new_parse_point.number_point = max_number_point + 1
         new_parse_point.next_word_searcher.create_first(main_pos, main_var)
         new_parse_point.create_status()
-        main_word = new_parse_point.parse_point_word_list[main_pos]
-        new_parse_point.view = self.view.create_child_view(new_parse_point,  main_word)
+        main_word = new_parse_point.pp_words[main_pos]
+        new_parse_point.view = self.view.create_child_view(new_parse_point, main_word)
         return new_parse_point
 
     def find_first_word(self, fun):
         max_number_point = self.number_point
         list_new_parse_points = []
-        for word_position in range(len(self.parse_point_word_list)):
-            cur_point_word = self.parse_point_word_list[word_position]
+        for word_position in range(len(self.pp_words)):
+            cur_point_word = self.pp_words[word_position]
             for variant_number in range(len(cur_point_word.word.forms)):
                 cur_morph = cur_point_word.word.forms[variant_number].morph
                 if fun(cur_morph):
@@ -177,7 +210,7 @@ class ParsePoint:
 
     def create_child_parse_point(self, max_number_point):
         """create and return new child ParsePoint"""
-        print("------")
+        # print("------")
         att_res = self.next_word_searcher.next()
         if att_res is None:
             return None
@@ -185,36 +218,43 @@ class ParsePoint:
 
         new_parse_point = self.copy()
 
-        new_parse_point.parse_point_word_list[depending_pp_word_pos].fix_morph_variant(dep_variant)
-        new_parse_point.parse_point_word_list[main_pp_word_pos].add_gp(g_pattern_to_apply,
-                                        new_parse_point.parse_point_word_list[depending_pp_word_pos])
+        new_parse_point.pp_words[depending_pp_word_pos].fix_morph_variant(dep_variant)
+        new_parse_point.pp_words[main_pp_word_pos].add_gp(g_pattern_to_apply,
+                                                          new_parse_point.pp_words[depending_pp_word_pos])
 
         new_parse_point.child_parse_point = []
-        new_parse_point.count_parsed_words += 1
+        new_parse_point.parsed_words.add(depending_pp_word_pos)
         new_parse_point.parsed.append((main_pp_word_pos, depending_pp_word_pos))
 
         new_parse_point.number_point = max_number_point + 1
         new_parse_point.next_word_searcher.create_child()
         new_parse_point.create_status()
 
-        dep_word = new_parse_point.parse_point_word_list[depending_pp_word_pos]
-        main_word = new_parse_point.parse_point_word_list[main_pp_word_pos]
+        dep_word = new_parse_point.pp_words[depending_pp_word_pos]
+        main_word = new_parse_point.pp_words[main_pp_word_pos]
         new_parse_point.view = self.view.create_child_view(new_parse_point, main_word, dep_word)
         self.child_parse_point.append(new_parse_point)
-        word_pair_text = str(g_pattern_to_apply.get_mark()) + ": " + str(main_pp_word_pos) + " + " + str(depending_pp_word_pos)
+        # word_pair_text = str(g_pattern_to_apply.get_mark()) + ": " + str(main_pp_word_pos) + " + " + str(depending_pp_word_pos)
+        word_pair_text = main_word.word.word_text + " + " + dep_word.word.word_text
         return new_parse_point, g_pattern_to_apply, word_pair_text
 
     def check_end_parse(self):
         """check that all words in this ParsePoint are parsed"""
-        # вроде достаточно проверять self.next_word_searcher.flag_end
-        for cur_point_word in self.parse_point_word_list:
+        # если неразобранными остались только потенциальные союзы, то можно заканчивать, а может, и нет
+        # TODO неразобранные союзы могут быть и союзами, и нет
+        for cur_point_word in self.pp_words:
             if not cur_point_word.parsed:
-                return False
+                print(type(cur_point_word.word.forms[0].morph.s_cl))
+                if next((x for x in cur_point_word.word.forms if x.morph.s_cl == 'conjunction'), None) is not None:
+                    # один из вариантов разбора неразобранного слова - союз
+                    continue
+                else:
+                    return False  # у неразобранного слова нет варианта разбора-союза
         return True
 
     def check_prep(self):
-        for i in range(len(self.parse_point_word_list)):
-            cur_main = self.parse_point_word_list[i]
+        for i in range(len(self.pp_words)):
+            cur_main = self.pp_words[i]
             if cur_main.is_preposition():
                 if not cur_main.used_gp:  # у предлога нет зависимого
                     return False
@@ -226,9 +266,9 @@ class ParsePoint:
         return True
 
     def verb_has_homogeneous_subject(self):
-        #если у глагола есть два зависимых именной части речи (сущ, прил и тп) И.п, то это однородн.подлежащие
-        for i in range(len(self.parse_point_word_list)):
-            cur_main = self.parse_point_word_list[i]
+        # если у глагола есть два зависимых именной части речи (сущ, прил и тп) И.п, то это однородн.подлежащие
+        for i in range(len(self.pp_words)):
+            cur_main = self.pp_words[i]
             count_subject = 0
             if cur_main.is_verb():
                 for cur_gp in cur_main.used_gp:
@@ -239,6 +279,21 @@ class ParsePoint:
                                 return True
         return False
 
+    def merge_homogeneous(self):
+        comp_fun = lambda x: x.get_used_variant().morph.get_homogeneous_params()
+        new_used_gp = []
+        homogeneous_nodes = []
+        for main in self.pp_words:
+            for key, group_items in groupby(sorted(main.used_gp, key = comp_fun), key = comp_fun):
+                group_items_list = list(group_items)
+                if len(group_items_list) > 1:
+                    h = HomogeneousGroup(group_items_list)
+                    new_used_gp.append(h)
+                    homogeneous_nodes.append((main, h))
+                else:
+                    new_used_gp.append(group_items_list)
+        main.used_gp = new_used_gp
+        return homogeneous_nodes
 
 
 class Sentence:
@@ -258,7 +313,7 @@ class Sentence:
         con.close()
 
     def __repr__(self):
-        return self.sent_title
+        return self.sent_title_without_numb
 
     def split_string(self, input_str):
         # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
@@ -323,16 +378,19 @@ class Sentence:
         self.best_parse_points[0].close()
         self.best_parse_points.pop(0)
 
-
     def sint_parse(self):
-
+        begin_time = timer()
         while True:
+            d = timer() - begin_time
+            # print(d)
+            if d > 60:
+                return "timeEnd"  # toDo не None !!!
             best_parse_point = self.get_best_parse_point()
             if best_parse_point is None:
-                print("Не разобрано!")
+                # print("Не разобрано!")
                 return None
             res = best_parse_point.create_child_parse_point(self.max_number_parse_point)
-            print(res)
+            # print(res)
             if res is None:
                 self.close_point()
                 self.view.close_node(best_parse_point.view.point_label)
@@ -340,8 +398,11 @@ class Sentence:
                 (new_point, pattern, word_pair_text) = res
                 self.max_number_parse_point += 1
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
-                if new_point.status == 'right':
-                        print("------")
-                        return new_point
+                if new_point.status == 'right' or new_point.status == 'right_with_conjs':
+                    print(new_point.status)
+                    if new_point.status == 'right_with_conjs':
+                        homogeneous_nodes = new_point.merge_homogeneous()
+                        new_point.view.merge_homogeneous(homogeneous_nodes)
+                    return new_point
                 else:
                     self.insert_new_parse_point(new_point)

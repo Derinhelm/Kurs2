@@ -148,6 +148,9 @@ class Morph:  # для хранения морфологических хара�
     def is_nominative(self):
         return self.case_morph == 'nominative'
 
+    def get_homogeneous_params(self):
+        return (self.s_cl, self.case_morph, self.prep_type)
+
 class WordForm:
     def __init__(self, morph: Morph, normal_form, prob):
         self.normal_form = normal_form
@@ -199,3 +202,7 @@ class Word:
 
     def get_all_form_patterns(self):
         return [form.g_patterns for form in self.forms]
+
+    def first_conj_variant(self):
+        '''Возвращает индекс первого союзного варианта разбора, если нет, то None'''
+        return next((ind for (ind, x) in enumerate(self.forms) if x.morph.s_cl == 'conjunction'), None)
