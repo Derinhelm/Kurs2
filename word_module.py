@@ -14,6 +14,9 @@ class Morph:  # для хранения морфологических хара�
             return 'reflexivepronoun'
         elif cur_parse.normal_form in ['я', 'ты', 'он', 'она', 'оно', 'мы', 'вы', 'они']:
             return 'personalpronoun'
+        elif 'Apro' in cur_parse.tag:
+            if str(cur_parse.tag.POS) == 'ADJF':
+                return 'pronounadjective'
         elif 'Impe' in cur_parse.tag:
             return 'unpersonalverb'
         elif 'Mult' in cur_parse.tag:

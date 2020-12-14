@@ -54,26 +54,31 @@ def get_main_number(cur_word, dep_main_word_dict):
         # собирали_0 грибы_1 и_2 ягоды_3. Собирали_0 + грибы_1, грибы_1 + и_2, и_2 + ягоды_3;
         # dep_main_word_dict должен быть {1: 0, 2: 1, 3: 2}
         # хотим модели Собирали + грибы, собирали + ягоды
+        cur_word.link_type = 'обраб.сочин'
         return dep_main_word_dict[cur_word.dom_id]
 
     return cur_word.dom_id
 
+
 def is_gpattern(dep_word, main_word):
     '''Проверяет является ли пара слов моделью управления
     '''
-    if dep_word.link_type == 'вводн': #Проблема, конечно [Y], существует [X]
+    if dep_word.link_type in ['подч-союзн', 'инф-союзн', 'сравнит', 'сравн-союзн', 'сент-предик', 'релят', 'огранич',
+                              'вводн', 'изъясн', 'разъяснит', 'примыкат', 'сент-соч', 'кратн',
+                              'соотнос', 'эксплет']:
         return False
-
+    if dep_word.link_type in ['сочин', 'соч-союзн']:
+        raise TypeError
     return True
 
-def insert(name_file, text_title):
+
+def get_pairs(file_title):
     '''Вставка....
 >>> print(1)
 1
-
     '''
     cur_text_pair_list = []
-    parsed_sentence_list = parse_xml(name_file)
+    parsed_sentence_list = parse_xml(file_title)
     for sentence_number in range(len(parsed_sentence_list)):
         cur_sentence, child_parent_dict = parsed_sentence_list[sentence_number]
         dep_main_word_dict = {}  # ключ - номер зависимого слова, значение - номер главного слова
@@ -86,18 +91,12 @@ def insert(name_file, text_title):
             cur_word = cur_sentence[cur_id]
             main_word_number = get_main_number(cur_word, dep_main_word_dict)
             dep_main_word_dict[cur_id] = main_word_number
-            if main_word_number is not None: # если главное слово - не корень дерева
+            if main_word_number is not None:  # если главное слово - не корень дерева
                 # TODO Если несколько однородных сказуемых? Шли и бежали люди???
                 # TODO если несколько одородных главных, но не сказуемых Красивые люди и быстрые собаки
                 main_word = cur_sentence[main_word_number]
                 if is_gpattern(cur_word, main_word):
                     new_pair = (main_word.word, main_word.normal_form, main_word.feat, cur_word.word,
-                               cur_word.normal_form, cur_word.feat, text_title, sentence_number + 1)
+                                cur_word.normal_form, cur_word.feat, file_title, sentence_number + 1)
                     cur_text_pair_list.append(new_pair)
     return cur_text_pair_list
-
-file_name = 'tests/sochin.txt'
-cur_pair_list = []
-cur_pair_list = insert(file_name, file_name)
-print(*cur_pair_list, sep = "\n")
-x = 0
