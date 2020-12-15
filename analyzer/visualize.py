@@ -100,7 +100,7 @@ class ParsePointView:
             dep_title = dep_word.word.word_text
 
             child.graph.add_node(dep_title)
-            child.graph.add_edge(main_title, dep_title)
+            child.graph.add_edge(main_title, dep_title, capacity = 1.0)
             child.change_word_view(dep_word.number_in_sentence, dep_word.get_form().__repr__())
         return child
 
@@ -123,11 +123,12 @@ class ParsePointView:
         h_nodes = {n: n for n in self.graph.nodes if not n[0].isalpha()}
         plt.ylim(y_min - y_margin, y_max + y_margin)
         nx.draw(self.graph, pos, arrows=False, node_size=500, node_color='w',
-                horizontalalignment='center', verticalalignment='center', font_size=12)
+                horizontalalignment='center', verticalalignment='center', font_size=12, edgelist = [])
         nx.draw_networkx_labels(self.graph, pos, labels=usual_nodes,
                                 font_color='black')
         nx.draw_networkx_labels(self.graph, pos, labels=h_nodes,
                                 font_color='green')
+        nx.draw_networkx_edges(self.graph, pos, edgelist = [i for i in self.graph.edges(data=True) if i[2]['capacity'] > 0])
         plt.title(self.sent_title)
 
         t = '_' + str(number_windows)
@@ -151,6 +152,8 @@ class ParsePointView:
         usual_nodes = {n:n for n in self.graph.nodes if n[0].isalpha()}
         h_nodes = {n:n for n in self.graph.nodes if not n[0].isalpha()}
         plt.ylim(y_min - y_margin, y_max + y_margin)
+        usual_nodes = {n:n for n in self.graph.nodes if n[0].isalpha()}
+        h_nodes = {n:n for n in self.graph.nodes if not n[0].isalpha()}
         fig.canvas.mpl_connect('button_press_event', lambda event: self.on_mouse_click_parse_point(event, pos))
         #nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
         #        verticalalignment='top', font_size=20)
@@ -188,11 +191,14 @@ class ParsePointView:
             self.graph.add_node(h.title)
             num += 1
             main_title = main.word.word_text
-            for c in h.words:
-                dep_title = c.dep_word.word.word_text
-                self.graph.add_edge(h.title, dep_title)
+            for i in range(len(h.words)):
+                dep_title = h.words[i].dep_word.word.word_text
+                self.graph.add_edge(h.title, dep_title, capacity = 1.0)
                 self.graph.remove_edge(main_title, dep_title)
-            self.graph.add_edge(main_title, h.title)
+                if i > 0:
+                    self.graph.add_edge(h.words[i - 1].dep_word.word.word_text,
+                                        h.words[i].dep_word.word.word_text, capacity = 0.0)
+            self.graph.add_edge(main_title, h.title, capacity = 1.0)
 
 
 class ParsePointTreeView:
