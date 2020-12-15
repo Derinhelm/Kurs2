@@ -445,9 +445,8 @@ class Sentence:
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
                 if new_point.status == 'right' or new_point.status == 'right_with_conjs':
                     print(new_point.status)
-                    if new_point.status == 'right_with_conjs':
-                        homogeneous_nodes = new_point.merge_homogeneous()
-                        new_point.view.merge_homogeneous(homogeneous_nodes)
+                    homogeneous_nodes = new_point.merge_homogeneous()
+                    new_point.view.merge_homogeneous(homogeneous_nodes)
                     return new_point
                 else:
                     self.insert_new_parse_point(new_point)
