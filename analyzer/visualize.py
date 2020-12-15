@@ -119,9 +119,15 @@ class ParsePointView:
         y_max = max(y_values)
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
+        usual_nodes = {n: n for n in self.graph.nodes if n[0].isalpha()}
+        h_nodes = {n: n for n in self.graph.nodes if not n[0].isalpha()}
         plt.ylim(y_min - y_margin, y_max + y_margin)
-        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=500, node_color='w',
+        nx.draw(self.graph, pos, arrows=False, node_size=500, node_color='w',
                 horizontalalignment='center', verticalalignment='center', font_size=12)
+        nx.draw_networkx_labels(self.graph, pos, labels=usual_nodes,
+                                font_color='black')
+        nx.draw_networkx_labels(self.graph, pos, labels=h_nodes,
+                                font_color='green')
         plt.title(self.sent_title)
 
         t = '_' + str(number_windows)
@@ -142,12 +148,18 @@ class ParsePointView:
         y_max = max(y_values)
         y_min = min(y_values)
         y_margin = (y_max - y_min) * 0.25
+        usual_nodes = {n:n for n in self.graph.nodes if n[0].isalpha()}
+        h_nodes = {n:n for n in self.graph.nodes if not n[0].isalpha()}
         plt.ylim(y_min - y_margin, y_max + y_margin)
         fig.canvas.mpl_connect('button_press_event', lambda event: self.on_mouse_click_parse_point(event, pos))
         #nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1, horizontalalignment='center',
         #        verticalalignment='top', font_size=20)
-        nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=1000, node_color='w',
+        nx.draw(self.graph, pos, font_color = 'black', arrows=False, node_size=1000, node_color='w',
                 horizontalalignment='center', verticalalignment='center', font_size=20)
+        nx.draw_networkx_labels(self.graph, pos, labels=usual_nodes,
+                               font_color='black')
+        nx.draw_networkx_labels(self.graph, pos, labels = h_nodes,
+                               font_color='green')
         plt.title(self.sent_title, fontsize=14)
         plt.gcf().canvas.set_window_title("Точка разбора")
         fig.canvas.draw_idle()
