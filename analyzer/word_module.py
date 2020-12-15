@@ -1,7 +1,7 @@
 import pymorphy2
 
-from analyzer.constants import *
-from analyzer.functions import get_patterns
+from constants import *
+from functions import get_patterns
 
 
 class Morph:  # для хранения морфологических характеристик

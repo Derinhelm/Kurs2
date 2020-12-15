@@ -1,7 +1,7 @@
 import pandas as pd
 
-from analyzer.constants import dict_field, NUMBER_MORPH_PARAMETRS
-from analyzer.patterns import GPattern
+from constants import dict_field, NUMBER_MORPH_PARAMETRS
+from patterns import GPattern
 
 
 def create_command(level, where_str):

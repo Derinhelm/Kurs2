@@ -5,7 +5,7 @@ from matplotlib.widgets import Button
 import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout
 from matplotlib.backend_bases import MouseButton
-from analyzer.patterns import GPattern
+from patterns import GPattern
 number_windows = 0
 
 

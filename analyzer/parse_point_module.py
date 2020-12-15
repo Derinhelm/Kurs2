@@ -8,10 +8,10 @@ import psycopg2
 import pymorphy2
 import re
 
-from analyzer.next_word_search_module import NextWordSearcher
-from analyzer.patterns import GPattern
-from analyzer.visualize import ParsePointView, ParsePointTreeView
-from analyzer.word_module import Word
+from next_word_search_module import NextWordSearcher
+from patterns import GPattern
+from visualize import ParsePointView, ParsePointTreeView
+from word_module import Word
 
 
 class Gp:
@@ -346,7 +346,7 @@ class Sentence:
         self.sent_title_numb = sent_title
         self.sent_title_without_numb = input_str
         self.punctuatuon_ind = punctuatuon_ind # индексы,
-        con = psycopg2.connect(dbname='gpatterns_copy', user='postgres',
+        con = psycopg2.connect(dbname='gpatterns', user='postgres',
                                password='postgres', host='localhost')
         morph_analyzer = pymorphy2.MorphAnalyzer()
         self.root_p_p = ParsePoint(word_list, con, morph_analyzer, self.sent_title_without_numb, self.punctuatuon_ind)
@@ -445,9 +445,8 @@ class Sentence:
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
                 if new_point.status == 'right' or new_point.status == 'right_with_conjs':
                     print(new_point.status)
-                    if new_point.status == 'right_with_conjs':
-                        homogeneous_nodes = new_point.merge_homogeneous()
-                        new_point.view.merge_homogeneous(homogeneous_nodes)
+                    homogeneous_nodes = new_point.merge_homogeneous()
+                    new_point.view.merge_homogeneous(homogeneous_nodes)
                     return new_point
                 else:
                     self.insert_new_parse_point(new_point)
