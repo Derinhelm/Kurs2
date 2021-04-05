@@ -65,6 +65,12 @@ class SentenceInfo:
     def get_word(self, word: WordInSentence):
         return self.words[word.number_in_sentence]
 
+    def get_word_by_pos(self, word_pos):
+        return self.words[word_pos]
+    
+    def get_count_of_words(self):
+        return len(self.words)
+
 class HomogeneousGroup:
     def __init__(self, words: WordInSentence, title):
         self.words = words
@@ -144,7 +150,10 @@ class ParsePoint:
     def create_firsts_pp(self, main_pos, main_var, max_number_point):
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[main_pos].fix_morph_variant(main_var)
-        new_next_word_searcher = self.next_word_searcher.copy()
+        unparsed_wordforms =  [(i, j) for i in range(self.sentence_info.get_count_of_words()) 
+            for j in range(len(self.sentence_info.get_word_by_pos(i).forms))]
+
+        new_next_word_searcher = NextWordSearcher(self.sentence_info, [], main_pos, main_var, unparsed_wordforms)
         new_child_parse_point = []
         new_parsed = copy.deepcopy(self.parsed)
         new_number_point = max_number_point + 1
@@ -157,7 +166,6 @@ class ParsePoint:
         main_word = new_parse_point.pp_words[main_pos]
         new_view = self.view.create_child_view(new_parse_point, main_word)
         new_parse_point.set_view(new_view)
-        new_parse_point.next_word_searcher.create_first(main_pos, main_var)
         new_parse_point.create_status()
         return new_parse_point
 
@@ -185,8 +193,8 @@ class ParsePoint:
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[depending_pp_word_pos].fix_morph_variant(dep_variant)
 
-        new_next_word_searcher = self.next_word_searcher.copy()
-        new_next_word_searcher.create_child()
+        new_next_word_searcher = NextWordSearcher(self.sentence_info, self.next_word_searcher.main_dep_pattern, 
+            depending_pp_word_pos, dep_variant, self.next_word_searcher.unparsed_wordforms)
         new_child_parse_point = []
 
         new_parsed = copy.deepcopy(self.parsed)
@@ -345,7 +353,7 @@ class Sentence:
                 potential_conjs.add(number)
             pp_words.append(WordInSentence(number))
         sentence_info = SentenceInfo(words)
-        pp = ParsePoint(pp_words, NextWordSearcher(pp_words, sentence_info), 'intermediate', [], [], 0, set(), potential_conjs, punctuations_ind, sentence_info)
+        pp = ParsePoint(pp_words, None, 'intermediate', [], [], 0, set(), potential_conjs, punctuations_ind, sentence_info)
         view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
         pp.set_view(view)
         return pp, sentence_info

@@ -348,7 +348,7 @@ class ParsePointTreeView:
         #        verticalalignment='top', font_size=10, font_color='black', node_color='white', edgecolors = nodecolors, edgewidth = 8)
         nx.draw(self.graph, pos, with_labels=True, arrows=False, node_size=900, horizontalalignment='center',
                 edge_color=edge_colors, verticalalignment='top', font_size=13, font_color='black', node_color='white', edgecolors=nodecolors,
-                edgewidth=8)
+                )#edgewidth=8)
         grafo_labels = nx.get_edge_attributes(self.graph, 'n')
         #nx.draw_networkx_edge_labels(self.graph, pos, font_size=10, edge_labels=grafo_labels, label_pos=0.3,
         #                             rotate=False)

@@ -98,6 +98,8 @@ class Morph:  # для хранения морфологических хара�
         self.degree = 'degree_any'  # toDo научиться выделять
         self.static = self.create_static(cur_parse)
         self.prep_type = self.create_prep_type(text)
+        self.all_params = set([self.s_cl, self.animate, self.gender, self.number, self.case_morph, self.reflection, self.perfective,
+            self.transitive, self.person, self.tense, self.voice, self.degree, self.static, self.prep_type])
 
     def __setattr__(self, attr, value):  # Morph - неизменяемый класс
         if attr not in self.__dict__.keys():
@@ -151,11 +153,14 @@ class Morph:  # для хранения морфологических хара�
     def get_homogeneous_params(self):
         return (self.s_cl, self.case_morph, self.prep_type)
 
+    def get_all_params(self):
+        return self.all_params
+
 class WordForm:
     def __init__(self, morph: Morph, normal_form, prob):
         self.normal_form = normal_form
         self.morph: Morph = morph
-        self.g_patterns = []  # список из Gpattern, в которых данная словоформа мб главной
+        self.g_patterns = []  # список из GPattern, в которых данная словоформа мб главной
         self.probability = prob  # вероятность разбора из pymorphy2
 
     def __repr__(self):

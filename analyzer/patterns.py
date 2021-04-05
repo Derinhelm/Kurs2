@@ -34,6 +34,9 @@ class GPattern:
     def get_dep_word(self):
         return self.dependent_word
 
+    def get_level(self):
+        return self.level
+
     def is_identical_dif_level(self, other):
         # модели разных уровней но с одинаковыми требованиями(мб какие-то требов. на главное/зависимое - None)
         if self.main_word_constraints != other.main_word_constraints:
@@ -51,7 +54,6 @@ class GPattern:
 
     def is_extended(self, other):
         # модели одинаковые (с точностью до уровня), но у self больше требований на главное слово
-
 
         if self.main_word is not None and other.main_word is not None and self.main_word != other.main_word:
             return False
