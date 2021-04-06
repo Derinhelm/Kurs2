@@ -15,5 +15,8 @@ def parse(str1, count = 1):
         if res == "timeEnd":
             break
         trace_view_copy = copy.deepcopy(s.view)
-        ans.append((res.pp_words, res.view, trace_view_copy))
+        word_text_morph_list = []
+        for choosing_word_variant in res.pp_words:
+            word_text_morph_list.append((s.get_text(choosing_word_variant), s.get_word_parsing_variant(choosing_word_variant)))
+        ans.append((word_text_morph_list, res.view, trace_view_copy))
     return ans

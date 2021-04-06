@@ -70,9 +70,10 @@ class PatternView:
 
 
 class ParsePointView:
-    def __init__(self, point_title, sent_title, words_count=None):
+    def __init__(self, point_title, sent_title, sentence_info, words_count=None):
         self.graph = nx.DiGraph()
         self.sent_title = sent_title
+        self.sentence_info = sentence_info
         self.words_view = []
         self.point_label = 'root'
         for i in range(words_count):
@@ -89,19 +90,19 @@ class ParsePointView:
         child.point_title = str(new_point)
         child.point_label = str(new_point.number_point)
         child.status = new_point.status
-        main_title = main_word.word.word_text
+        main_title = self.sentence_info.get_word(main_word).get_text()
         #main_title = main_word.word.word_text + "_" + str(main_word.number_in_sentence)
         if dep_word is None:
             # первая для разбора точка
             child.graph.add_node(main_title)
-            child.change_word_view(main_word.number_in_sentence, main_word.get_form().__repr__())
+            child.change_word_view(main_word.number_in_sentence, self.sentence_info.get_form_info(main_word))
         else:
             #dep_title = dep_word.word.word_text + "_" + str(dep_word.number_in_sentence)
-            dep_title = dep_word.word.word_text
+            dep_title = self.sentence_info.get_word(dep_word).get_text()
 
             child.graph.add_node(dep_title)
             child.graph.add_edge(main_title, dep_title)
-            child.change_word_view(dep_word.number_in_sentence, dep_word.get_form().__repr__())
+            child.change_word_view(dep_word.number_in_sentence, self.sentence_info.get_form_info(dep_word))
         return child
 
     def easy_visualize(self):

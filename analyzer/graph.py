@@ -90,11 +90,11 @@ class ResWindow(QWidget):
                 table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
                 table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
                 for number_column_t in range(len(t)):
-                    w = t[number_column_t]
-                    item = QTableWidgetItem(w.get_word_text())
+                    word_text, word_morph = t[number_column_t]
+                    item = QTableWidgetItem(word_text)
                     item.setTextAlignment(Qt.AlignVCenter | Qt.AlignHCenter)
                     table.setItem(0, number_column_t, item)
-                    x = str(w.get_morph()).replace("; ", "\n")
+                    x = str(word_morph).replace("; ", "\n")
                     table.setItem(1, number_column_t, QTableWidgetItem(x))
                 table.verticalHeader().hide()
                 # text_title = QLabel(s)

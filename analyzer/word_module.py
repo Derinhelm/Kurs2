@@ -177,6 +177,9 @@ class WordForm:
     def get_patterns(self):
         return self.g_patterns
 
+    def get_morph(self):
+        return self.morph
+
 
 class Word:
     def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text):
@@ -207,3 +210,12 @@ class Word:
     def first_conj_variant(self):
         '''Возвращает индекс первого союзного варианта разбора, если нет, то None'''
         return next((ind for (ind, x) in enumerate(self.forms) if x.morph.s_cl == 'conjunction'), None)
+
+    def get_variant(self, variant_id):
+        return self.forms[variant_id]
+    
+    def get_text(self):
+        return self.word_text
+
+    def get_forms(self):
+        return self.forms

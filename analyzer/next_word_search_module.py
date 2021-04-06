@@ -193,12 +193,13 @@ class DepWordSeacher:
         return self.flag_dep_end
 
 class MorphInfo:
-    def __init__(self, pp_words):
+    def __init__(self, pp_words, sentence_info):
         # список вида [[модели управления]],
         # для каждого варианта разбора каждого слова храним его возможные модели управления
         # j элементе i элемента all_patterns_list - список моделей управления для j варианта разбора i слова
         # word - WordInSentence, надо перевызывать
-        self.all_patterns_list = [word.word.get_all_form_patterns() for word in
+        self.sentence_info = sentence_info
+        self.all_patterns_list = [self.sentence_info.get_word(word).get_all_form_patterns() for word in
                                   pp_words]  # для дальнешего извлечения моделей
 
         self.morph_position_dict = {}
@@ -207,7 +208,7 @@ class MorphInfo:
         self.word_position_dict = {}
         # ключ - нач.форма слова, значение - set из пар (позиция слова, номер варианта разбора)
         for word_position in range(len(pp_words)):
-            word = pp_words[word_position].word
+            word = self.sentence_info.get_word(pp_words[word_position])
             for form_position in range(len(word.forms)):
                 form = word.forms[form_position]
                 for cur_param in form.morph.get_imp():
@@ -239,16 +240,17 @@ class MorphInfo:
         return self.all_patterns_list[word_pos][word_variant]
 
 class NextWordSearcher:
-    def __init__(self, pp_words):
+    def __init__(self, pp_words, sentence_info):
 
 
         self.word_variants_list = []  # список, в какой позиции, какой вариант мб
         # список неразобранных словоформ [(номер слова, номер варианта)]
 
-        for i in range(len(pp_words)):
-            self.word_variants_list += [(i, j) for j in range(len(pp_words[i].word.forms))]
+        self.sentence_info = sentence_info
+        self.word_variants_list = [(i, j) for i in range(len(pp_words)) for j in range(len(self.sentence_info.get_word(pp_words[i]).forms))]
 
-        self.morph_info = MorphInfo(pp_words)
+        self.sentence_info = sentence_info
+        self.morph_info = MorphInfo(pp_words, sentence_info)
 
 
         self.len_sent = len(pp_words)

@@ -19,12 +19,8 @@ class Gp:
         self.model = mod
         self.dep_word = dw
 
-    def get_used_variant(self):# -> WordForm:
-        return self.dep_word.word.forms[self.dep_word.used_morph_answer]
-
 class WordInSentence:
-    def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text: str, number):
-        self.word = Word(con, morph_analyzer, word_text)
+    def __init__(self, number):
         self.parsed = False
         self.used_morph_answer = None  # номер варианта разбора для разобранных слов
         self.used_gp = []  # типа Gp
@@ -32,8 +28,8 @@ class WordInSentence:
 
     def __repr__(self):
         if self.parsed:
-            return self.word.word_text + ": " + self.get_morph().__repr__()
-        return "not_parsed"
+            return "word № " + str(self.number_in_sentence) + ", variant " + str(self.used_morph_answer)
+        return "word № " + str(self.number_in_sentence) + " not_parsed"
 
     def __eq__(self, other):
         return self.number_in_sentence == other.number_in_sentence
@@ -46,53 +42,28 @@ class WordInSentence:
         self.parsed = True
         self.used_morph_answer = variant_position
 
-    def get_form(self):
-        if self.parsed:
-            return self.word.forms[self.used_morph_answer]
-        return None
-
-    def get_morph(self):
-        if self.parsed:
-            return self.word.forms[self.used_morph_answer].morph
-        return None
-
-    def get_normal(self):
-        if self.parsed:
-            return self.word.forms[self.used_morph_answer].normal_form
-        return None
-
-    def get_word_text(self):
-        return self.word.word_text
-
-    def is_preposition(self):
-        m = self.get_morph()
-        if m is None:
-            return False
-        return m.is_preposition()
-
-    def is_verb(self):
-        m = self.get_morph()
-        if m is None:
-            return False
-        return m.is_verb()
-
-    def is_nominative(self):
-        m = self.get_morph()
-        if m is None:
-            return False
-        return m.is_nominative()
-
-    def is_noun_or_adj(self):
-        m = self.get_morph()
-        if m is None:
-            return False
-        return m.is_noun_or_adj()
+    def is_parsed(self):
+        return self.parsed
 
     def add_gp(self, pattern: GPattern, dep_word):
         # dep_word - WordInSentence
         new_gp = Gp(pattern, dep_word)
         self.used_gp.append(new_gp)
 
+class SentenceInfo:
+    def __init__(self, words):
+        self.words = words # список элементов типа Word
+
+    def get_form_info(self, word: WordInSentence):
+        if word.parsed:
+            return self.words[word.number_in_sentence].get_variant(word.used_morph_answer)
+        return None
+
+    def get_text(self, word: WordInSentence):
+        return self.words[word.number_in_sentence].get_text()
+
+    def get_word(self, word: WordInSentence):
+        return self.words[word.number_in_sentence]
 
 class HomogeneousGroup:
     def __init__(self, words: WordInSentence, title):
@@ -102,25 +73,18 @@ class HomogeneousGroup:
 class ParsePoint:
     direct_for_is_applicable = 1
 
-    def __init__(self, word_list, con, morph_analyzer, sent_title, punctuations_ind):
+    def __init__(self, pp_words, next_word_searcher, status, child_parse_point, parsed, number_point, parsed_words, potential_conjs, punctuations_ind, view, sentence_info):
+        self.pp_words = pp_words
+        self.next_word_searcher = next_word_searcher
+        self.status = status
+        self.child_parse_point = child_parse_point
+        self.parsed = parsed
+        self.number_point = number_point
+        self.parsed_words = parsed_words
+        self.potential_conjs = potential_conjs
         self.punctuations_ind = punctuations_ind
-        self.pp_words = []
-        self.potential_conjs = set()
-        for number in range(len(word_list)):
-            word_text = word_list[number]
-            cur_parse_point_word = WordInSentence(con, morph_analyzer, word_text, number)
-            if cur_parse_point_word.word.first_conj_variant() is not None:  # у слова есть вариант разбора - союз
-                self.potential_conjs.add(number)
-            self.pp_words.append(cur_parse_point_word)
-
-        self.child_parse_point = []
-        self.parsed = []
-        self.number_point = 0
-        self.status = 'intermediate'
-        self.parsed_words = set()
-
-        self.next_word_searcher = NextWordSearcher(self.pp_words)
-        self.view = ParsePointView('root', sent_title, len(self.pp_words))
+        self.view = view
+        self.sentence_info = sentence_info # TODO переделать! sentence_info лежит везде
 
     def __repr__(self):
         ans = str(self.number_point) + ":"
@@ -189,6 +153,7 @@ class ParsePoint:
         new_parse_point.view = copy.deepcopy(self.view)
         new_parse_point.parsed_words = copy.deepcopy(self.parsed_words)
         new_parse_point.potential_conjs = copy.deepcopy(self.potential_conjs)
+        new_parse_point.sentence_info = copy.copy(self.sentence_info)
         return new_parse_point
 
     def create_firsts_pp(self, main_pos, main_var, max_number_point):
@@ -208,9 +173,9 @@ class ParsePoint:
         max_number_point = self.number_point
         list_new_parse_points = []
         for word_position in range(len(self.pp_words)):
-            cur_point_word = self.pp_words[word_position]
-            for variant_number in range(len(cur_point_word.word.forms)):
-                cur_morph = cur_point_word.word.forms[variant_number].morph
+            cur_point_word_forms = self.sentence_info.get_word(self.pp_words[word_position]).get_forms()
+            for variant_number in range(len(cur_point_word_forms)):
+                cur_morph = cur_point_word_forms[variant_number].morph
                 if fun(cur_morph):
                     new_parse_point = self.create_firsts_pp(word_position, variant_number, max_number_point)
                     max_number_point += 1
@@ -244,7 +209,7 @@ class ParsePoint:
         new_parse_point.view = self.view.create_child_view(new_parse_point, main_word, dep_word)
         self.child_parse_point.append(new_parse_point)
         # word_pair_text = str(g_pattern_to_apply.get_mark()) + ": " + str(main_pp_word_pos) + " + " + str(depending_pp_word_pos)
-        word_pair_text = main_word.word.word_text + " + " + dep_word.word.word_text
+        word_pair_text = self.sentence_info.get_word(main_word).get_text() + " + " + self.sentence_info.get_word(dep_word).get_text()
         return new_parse_point, g_pattern_to_apply, word_pair_text
 
     def check_end_parse(self):
@@ -264,28 +229,35 @@ class ParsePoint:
     def check_prep(self):
         for i in range(len(self.pp_words)):
             cur_main = self.pp_words[i]
-            if cur_main.is_preposition():
-                if not cur_main.used_gp:  # у предлога нет зависимого
-                    return False
-                if len(cur_main.used_gp) > 1:  # у предлога больше одного зависимого
-                    return False
-                cur_dep = cur_main.used_gp[0].dep_word
-                if cur_dep.number_in_sentence <= i:  # у предлога зависимое должно стоять справа от главного
-                    return False
+            if cur_main.is_parsed():
+                main_morph = self.sentence_info.get_form_info(cur_main).get_morph()
+                if main_morph.is_preposition() :
+                    if not cur_main.used_gp:  # у предлога нет зависимого
+                        return False
+                    if len(cur_main.used_gp) > 1:  # у предлога больше одного зависимого
+                        return False
+                    cur_dep = cur_main.used_gp[0].dep_word
+                    if cur_dep.number_in_sentence <= i:  # у предлога зависимое должно стоять справа от главного
+                        return False
         return True
 
     def verb_has_homogeneous_subject(self):
         # если у глагола есть два зависимых именной части речи (сущ, прил и тп) И.п, то это однородн.подлежащие
         for i in range(len(self.pp_words)):
             cur_main = self.pp_words[i]
-            count_subject = 0
-            if cur_main.is_verb():
-                for cur_gp in cur_main.used_gp:
-                    if cur_gp.dep_word.is_noun_or_adj():
-                        if cur_gp.dep_word.is_nominative():
-                            count_subject += 1
-                            if count_subject > 1:
-                                return True
+            if cur_main.is_parsed():
+                main_morph = self.sentence_info.get_form_info(cur_main).get_morph()
+                count_subject = 0
+                if main_morph.is_verb():
+                    for cur_gp in cur_main.used_gp:
+                        dep_word = cur_gp.dep_word
+                        if dep_word.is_parsed():
+                            dep_morph = self.sentence_info.get_form_info(dep_word).get_morph()
+                        if dep_morph.is_noun_or_adj():
+                            if dep_morph.is_nominative():
+                                count_subject += 1
+                                if count_subject > 1:
+                                    return True
         return False
 
     def find_descendants(self):
@@ -320,7 +292,7 @@ class ParsePoint:
 
     def merge_homogeneous(self):
         descendants = self.find_descendants()
-        comp_fun = lambda x: x.get_used_variant().morph.get_homogeneous_params()
+        comp_fun = lambda x: self.sentence_info.get_word(x.dep_word).get_forms()[x.dep_word.used_morph_answer].morph.get_homogeneous_params()
         new_used_gp = []
         homogeneous_nodes = []
         for main in self.pp_words:
@@ -349,13 +321,34 @@ class Sentence:
         con = psycopg2.connect(dbname='gpatterns', user='postgres',
                                password='postgres', host='localhost')
         morph_analyzer = pymorphy2.MorphAnalyzer()
-        self.root_p_p = ParsePoint(word_list, con, morph_analyzer, self.sent_title_without_numb, self.punctuatuon_ind)
+        self.root_p_p, self.sentence_info = self.create_root_pp(word_list, con, morph_analyzer, self.sent_title_without_numb, self.punctuatuon_ind)
         self.view = ParsePointTreeView(self.sent_title_numb, self.root_p_p.view)
         self.create_first_parse_points()
         con.close()
 
     def __repr__(self):
         return self.sent_title_without_numb
+
+    def create_root_pp(self, word_texts, con, morph_analyzer, sent_title, punctuations_ind):
+        pp_words = [] # [WordInSentence]
+        words = [] #  [Word]
+        potential_conjs = set()
+        for number in range(len(word_texts)):
+            word_info = Word(con, morph_analyzer, word_texts[number])
+            words.append(word_info)
+            if word_info.first_conj_variant() is not None:  # у слова есть вариант разбора - союз
+                potential_conjs.add(number)
+            pp_words.append(WordInSentence(number))
+        sentence_info = SentenceInfo(words)
+        view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
+        pp = ParsePoint(pp_words, NextWordSearcher(pp_words, sentence_info), 'intermediate', [], [], 0, set(), potential_conjs, punctuations_ind, view, sentence_info)
+        return pp, sentence_info
+
+    def get_word_parsing_variant(self, word: WordInSentence):
+        return self.sentence_info.get_form_info(word)
+
+    def get_text(self, word: WordInSentence):
+        return self.sentence_info.get_text(word)
 
     def split_string(self, input_str):
         # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
