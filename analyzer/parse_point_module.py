@@ -185,13 +185,11 @@ class ParsePoint:
                     list_new_parse_points.append(new_parse_point)
         return list_new_parse_points
 
-    def create_child_parse_point(self, max_point_number):
+    def find_best_gp(self):
+        return self.next_word_searcher.next()
+
+    def create_child_parse_point(self, max_point_number, main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant):
         """create and return new child ParsePoint"""
-        # print("------")
-        att_res = self.next_word_searcher.next()
-        if att_res is None:
-            return None
-        (main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant) = att_res
 
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[depending_pp_word_pos].fix_morph_variant(dep_variant)
@@ -461,13 +459,16 @@ class Sentence:
             if best_parse_point is None:
                 # print("Не разобрано!")
                 return None
-            res = best_parse_point.create_child_parse_point(self.max_number_parse_point)
+            res1 = best_parse_point.find_best_gp()
             # print(res)
-            if res is None:
+            if res1 is None:
                 self.close_point()
                 self.view.close_node(best_parse_point.view.point_label)
             else:
-                (new_point, pattern, word_pair_text) = res
+                main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant = res1
+                res2 = best_parse_point.create_child_parse_point(self.max_number_parse_point, \
+                        main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant)
+                (new_point, pattern, word_pair_text) = res2
                 self.graph.add_node(new_point.point_number)
                 self.graph.add_edge(best_parse_point.point_number, new_point.point_number)
                 self.graph_id_parse_point[new_point.point_number] = new_point
