@@ -3,7 +3,7 @@ import sys
 from timeit import default_timer as timer
 from itertools import groupby
 
-
+import networkx as nx
 import psycopg2
 import pymorphy2
 import re
@@ -18,6 +18,7 @@ class Gp:
     def __init__(self, mod, dw):
         self.model = mod
         self.dep_word = dw
+
 
 class WordInSentence:
     def __init__(self, number):
@@ -50,9 +51,10 @@ class WordInSentence:
         new_gp = Gp(pattern, dep_word)
         self.used_gp.append(new_gp)
 
+
 class SentenceInfo:
     def __init__(self, words):
-        self.words = words # список элементов типа Word
+        self.words = words  # список элементов типа Word
 
     def get_form_info(self, word: WordInSentence):
         if word.parsed:
@@ -67,38 +69,39 @@ class SentenceInfo:
 
     def get_word_by_pos(self, word_pos):
         return self.words[word_pos]
-    
+
     def get_count_of_words(self):
         return len(self.words)
+
 
 class HomogeneousGroup:
     def __init__(self, words: WordInSentence, title):
         self.words = words
         self.title = title
 
+
 class ParsePoint:
     direct_for_is_applicable = 1
-    
-    def __init__(self, pp_words, next_word_searcher, status, child_parse_point, 
-            parsed, number_point, parsed_words, potential_conjs, punctuations_ind, sentence_info):
+
+    def __init__(self, pp_words, next_word_searcher, status,
+                 parsed, point_number, parsed_words, potential_conjs, punctuations_ind, sentence_info):
         self.pp_words = pp_words
         self.next_word_searcher = next_word_searcher
         self.status = status
-        self.child_parse_point = child_parse_point
         self.parsed = parsed
-        self.number_point = number_point
+        self.point_number = point_number
         self.parsed_words = parsed_words
         self.potential_conjs = potential_conjs
         self.punctuations_ind = punctuations_ind
         self.view = None
-        self.sentence_info = sentence_info # TODO переделать! sentence_info лежит везде
+        self.sentence_info = sentence_info  # TODO переделать! sentence_info лежит везде
 
     def __repr__(self):
-        ans = str(self.number_point) + ":"
+        ans = str(self.point_number) + ":"
         for i in self.parsed:
             ans += str(i[0]) + "+" + str(i[1]) + ";"
         return ans
-        
+
     def set_view(self, view):
         self.view = view
 
@@ -143,26 +146,26 @@ class ParsePoint:
         for conj_ind in self.potential_conjs - self.parsed_words:
             self.pp_words[conj_ind].fix_morph_variant(self.pp_words[conj_ind].word.first_conj_variant())
 
-
     def close(self):
         self.status = 'intermediate-close'
 
-    def create_firsts_pp(self, main_pos, main_var, max_number_point):
+    def create_firsts_pp(self, main_pos, main_var, max_point_number):
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[main_pos].fix_morph_variant(main_var)
-        unparsed_wordforms =  [(i, j) for i in range(self.sentence_info.get_count_of_words()) 
-            for j in range(len(self.sentence_info.get_word_by_pos(i).forms))]
+        unparsed_wordforms = [(i, j) for i in range(self.sentence_info.get_count_of_words())
+                              for j in range(len(self.sentence_info.get_word_by_pos(i).forms))]
 
         new_next_word_searcher = NextWordSearcher(self.sentence_info, [], main_pos, main_var, unparsed_wordforms)
-        new_child_parse_point = []
         new_parsed = copy.deepcopy(self.parsed)
-        new_number_point = max_number_point + 1
+        new_point_number = max_point_number + 1
         new_parsed_words = set([main_pos])
         new_potential_conjs = copy.deepcopy(self.potential_conjs)
+        new_parse_point = ParsePoint(pp_words=new_pp_words, next_word_searcher=new_next_word_searcher,
+                                     status=self.status, parsed=new_parsed, point_number=new_point_number,
+                                     parsed_words=new_parsed_words,
+                                     potential_conjs=new_potential_conjs, punctuations_ind=self.punctuations_ind,
+                                     sentence_info=self.sentence_info)
 
-        new_parse_point = ParsePoint(new_pp_words, new_next_word_searcher, self.status, new_child_parse_point, 
-            new_parsed, new_number_point, new_parsed_words, new_potential_conjs, self.punctuations_ind, self.sentence_info)
-        
         main_word = new_parse_point.pp_words[main_pos]
         new_view = self.view.create_child_view(new_parse_point, main_word)
         new_parse_point.set_view(new_view)
@@ -170,19 +173,19 @@ class ParsePoint:
         return new_parse_point
 
     def find_first_word(self, fun):
-        max_number_point = self.number_point
+        max_point_number = self.point_number
         list_new_parse_points = []
         for word_position in range(len(self.pp_words)):
             cur_point_word_forms = self.sentence_info.get_word(self.pp_words[word_position]).get_forms()
             for variant_number in range(len(cur_point_word_forms)):
                 cur_morph = cur_point_word_forms[variant_number].morph
                 if fun(cur_morph):
-                    new_parse_point = self.create_firsts_pp(word_position, variant_number, max_number_point)
-                    max_number_point += 1
+                    new_parse_point = self.create_firsts_pp(word_position, variant_number, max_point_number)
+                    max_point_number += 1
                     list_new_parse_points.append(new_parse_point)
         return list_new_parse_points
 
-    def create_child_parse_point(self, max_number_point):
+    def create_child_parse_point(self, max_point_number):
         """create and return new child ParsePoint"""
         # print("------")
         att_res = self.next_word_searcher.next()
@@ -193,13 +196,13 @@ class ParsePoint:
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[depending_pp_word_pos].fix_morph_variant(dep_variant)
 
-        new_next_word_searcher = NextWordSearcher(self.sentence_info, self.next_word_searcher.main_dep_pattern, 
-            depending_pp_word_pos, dep_variant, self.next_word_searcher.unparsed_wordforms)
-        new_child_parse_point = []
+        new_next_word_searcher = NextWordSearcher(self.sentence_info, self.next_word_searcher.main_dep_pattern,
+                                                  depending_pp_word_pos, dep_variant,
+                                                  self.next_word_searcher.unparsed_wordforms)
 
         new_parsed = copy.deepcopy(self.parsed)
         new_parsed.append((main_pp_word_pos, depending_pp_word_pos))
-        new_number_point = max_number_point + 1
+        new_point_number = max_point_number + 1
 
         new_parsed_words = copy.deepcopy(self.parsed_words)
         new_parsed_words.add(depending_pp_word_pos)
@@ -209,8 +212,12 @@ class ParsePoint:
 
         # punctuations_ind - общее, тк пунктуация общая, 
         # TODO сначала вместо view - None, потом ставим его вручную...
-        new_parse_point = ParsePoint(new_pp_words, new_next_word_searcher, self.status, new_child_parse_point, 
-            new_parsed, new_number_point, new_parsed_words, new_potential_conjs, self.punctuations_ind, self.sentence_info)
+
+        new_parse_point = ParsePoint(pp_words=new_pp_words, next_word_searcher=new_next_word_searcher,
+                                     status=self.status,
+                                     parsed=new_parsed, point_number=new_point_number, parsed_words=new_parsed_words,
+                                     potential_conjs=new_potential_conjs, punctuations_ind=self.punctuations_ind,
+                                     sentence_info=self.sentence_info)
 
         new_parse_point.pp_words[main_pp_word_pos].add_gp(g_pattern_to_apply,
                                                           new_parse_point.pp_words[depending_pp_word_pos])
@@ -220,9 +227,9 @@ class ParsePoint:
         new_parse_point.set_view(new_view)
         new_parse_point.create_status()
 
-        self.child_parse_point.append(new_parse_point)
         # word_pair_text = str(g_pattern_to_apply.get_mark()) + ": " + str(main_pp_word_pos) + " + " + str(depending_pp_word_pos)
-        word_pair_text = self.sentence_info.get_word(main_word).get_text() + " + " + self.sentence_info.get_word(dep_word).get_text()
+        word_pair_text = self.sentence_info.get_word(main_word).get_text() + " + " + self.sentence_info.get_word(
+            dep_word).get_text()
         return new_parse_point, g_pattern_to_apply, word_pair_text
 
     def check_end_parse(self):
@@ -244,7 +251,7 @@ class ParsePoint:
             cur_main = self.pp_words[i]
             if cur_main.is_parsed():
                 main_morph = self.sentence_info.get_form_info(cur_main).get_morph()
-                if main_morph.is_preposition() :
+                if main_morph.is_preposition():
                     if not cur_main.used_gp:  # у предлога нет зависимого
                         return False
                     if len(cur_main.used_gp) > 1:  # у предлога больше одного зависимого
@@ -266,17 +273,17 @@ class ParsePoint:
                         dep_word = cur_gp.dep_word
                         if dep_word.is_parsed():
                             dep_morph = self.sentence_info.get_form_info(dep_word).get_morph()
-                        if dep_morph.is_noun_or_adj():
-                            if dep_morph.is_nominative():
-                                count_subject += 1
-                                if count_subject > 1:
-                                    return True
+                            if dep_morph.is_noun_or_adj():
+                                if dep_morph.is_nominative():
+                                    count_subject += 1
+                                    if count_subject > 1:
+                                        return True
         return False
 
     def find_descendants(self):
         descendants = {}
         for main in self.pp_words:
-            descendants[main] = set(map(lambda x:x.dep_word, main.used_gp))
+            descendants[main] = set(map(lambda x: x.dep_word, main.used_gp))
         changes = -1
         while changes != 0:
             changes = 0
@@ -305,20 +312,21 @@ class ParsePoint:
 
     def merge_homogeneous(self):
         descendants = self.find_descendants()
-        comp_fun = lambda x: self.sentence_info.get_word(x.dep_word).get_forms()[x.dep_word.used_morph_answer].morph.get_homogeneous_params()
+        comp_fun = lambda x: self.sentence_info.get_word(x.dep_word).get_forms()[
+            x.dep_word.used_morph_answer].morph.get_homogeneous_params()
         new_used_gp = []
         homogeneous_nodes = []
         for main in self.pp_words:
-            for key, group_items in groupby(sorted(main.used_gp, key = comp_fun), key = comp_fun):
-                group_items_list = sorted(list(group_items), key = lambda x: x.dep_word.number_in_sentence)
+            for key, group_items in groupby(sorted(main.used_gp, key=comp_fun), key=comp_fun):
+                group_items_list = sorted(list(group_items), key=lambda x: x.dep_word.number_in_sentence)
                 if len(group_items_list) > 1:
                     title = self.create_homogeneous_title(group_items_list, descendants)
-                    h = HomogeneousGroup(group_items_list, title)
+                    h = HomogeneousGroup(group_items_list, title) #TODO исправить!
                     new_used_gp.append(h)
                     homogeneous_nodes.append((main, h))
                 else:
                     new_used_gp.append(group_items_list)
-        main.used_gp = new_used_gp
+        main.used_gp = new_used_gp # TODO что это?
         return homogeneous_nodes
 
 
@@ -330,21 +338,26 @@ class Sentence:
         word_list, sent_title, punctuatuon_ind = self.split_string(input_str)
         self.sent_title_numb = sent_title
         self.sent_title_without_numb = input_str
-        self.punctuatuon_ind = punctuatuon_ind # индексы,
+        self.punctuatuon_ind = punctuatuon_ind  # индексы,
         con = psycopg2.connect(dbname='gpatterns', user='postgres',
-                               password='postgres', host='localhost')
+                               password='postgres', host='localhost', port='5433')
         morph_analyzer = pymorphy2.MorphAnalyzer()
-        self.root_p_p, self.sentence_info = self.create_root_pp(word_list, con, morph_analyzer, self.sent_title_without_numb, self.punctuatuon_ind)
+        self.root_p_p, self.sentence_info = self.create_root_pp(word_list, con, morph_analyzer,
+                                                                self.sent_title_without_numb, self.punctuatuon_ind)
         self.view = ParsePointTreeView(self.sent_title_numb, self.root_p_p.view)
+        self.graph = nx.DiGraph()
+        self.graph.add_node(0)
+        self.graph_id_parse_point = {0: self.root_p_p}
         self.create_first_parse_points()
         con.close()
+
 
     def __repr__(self):
         return self.sent_title_without_numb
 
     def create_root_pp(self, word_texts, con, morph_analyzer, sent_title, punctuations_ind):
-        pp_words = [] # [WordInSentence]
-        words = [] #  [Word]
+        pp_words = []  # [WordInSentence]
+        words = []  # [Word]
         potential_conjs = set()
         for number in range(len(word_texts)):
             word_info = Word(con, morph_analyzer, word_texts[number])
@@ -353,7 +366,10 @@ class Sentence:
                 potential_conjs.add(number)
             pp_words.append(WordInSentence(number))
         sentence_info = SentenceInfo(words)
-        pp = ParsePoint(pp_words, None, 'intermediate', [], [], 0, set(), potential_conjs, punctuations_ind, sentence_info)
+        pp = ParsePoint(pp_words=pp_words, next_word_searcher=None, status='intermediate', parsed=[],
+                        point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
+                        punctuations_ind=punctuations_ind,
+                        sentence_info=sentence_info)
         view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
         pp.set_view(view)
         return pp, sentence_info
@@ -410,12 +426,16 @@ class Sentence:
                 else:
                     print("В предложении нет глагола, сущ в И.п, предлога")
                     sys.exit()
-        self.root_p_p.child_parse_point = list_new_parse_points
+        for i in range(len(list_new_parse_points)):
+            new_point_id = i + 1
+            self.graph.add_node(new_point_id)
+            self.graph.add_edge(0, new_point_id)
+            child_point = list_new_parse_points[i]
+            self.graph_id_parse_point[new_point_id] = child_point
+            self.view.add_edge(self.root_p_p.view, child_point.view)
         self.max_number_parse_point = len(list_new_parse_points)
         # есть корневая точка и len(list_new_parse_points) ее дочерних,
         self.best_parse_points = copy.deepcopy(list_new_parse_points)
-        for cur_child in list_new_parse_points:
-            self.view.add_edge(self.root_p_p.view, cur_child.view)
 
     def insert_new_parse_point(self, new_point):
         """insert new ParsePoint into best_parse_points"""
@@ -448,6 +468,9 @@ class Sentence:
                 self.view.close_node(best_parse_point.view.point_label)
             else:
                 (new_point, pattern, word_pair_text) = res
+                self.graph.add_node(new_point.point_number)
+                self.graph.add_edge(best_parse_point.point_number, new_point.point_number)
+                self.graph_id_parse_point[new_point.point_number] = new_point
                 self.max_number_parse_point += 1
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
                 if new_point.status == 'right' or new_point.status == 'right_with_conjs':

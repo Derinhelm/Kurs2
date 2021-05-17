@@ -88,10 +88,10 @@ class ParsePointView:
     def create_child_view(self, new_point, main_word, dep_word=None):
         child = copy.deepcopy(self)
         child.point_title = str(new_point)
-        child.point_label = str(new_point.number_point)
+        child.point_label = str(new_point.point_number)
         child.status = new_point.status
         main_title = self.sentence_info.get_word(main_word).get_text()
-        #main_title = main_word.word.word_text + "_" + str(main_word.number_in_sentence)
+        #main_title = main_word.word.word_text + "_" + str(main_word.number_in_sentence) TODO вернуть! Но как найти номер слова в предложении?
         if dep_word is None:
             # первая для разбора точка
             child.graph.add_node(main_title)
@@ -178,7 +178,9 @@ class ParsePointView:
                 if cur_dist_2 < min_dist_2:
                     near_word = word
                     min_dist_2 = cur_dist_2
+
             word_border = near_word.rfind('_')
+            print(near_word, word_border)
             number_word = int(near_word[word_border + 1:])
             self.words_view[number_word].visualize()
 
