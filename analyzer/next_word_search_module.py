@@ -96,10 +96,10 @@ def find_best_pattern_in_list(param_list):
 
 
 class NextWordSearcher:
-    def __init__(self, sentence_info, main_dep_pattern, last_parsed_word_pos: int, last_parsed_word_var: int, unparsed_wordforms):
+    def __init__(self, sentence_info, triples, last_parsed_word_pos: int, last_parsed_word_var: int, unparsed_wordforms):
         self.sentence_info = sentence_info
-        self.main_dep_pattern = main_dep_pattern
-        self.last_parsed_word_pos = last_parsed_word_pos # последняя разобранная словоформа. Перед первым запуском NextWordSearcher тройки с ней надо удалить из main_dep_pattern
+        self.triples = triples
+        self.last_parsed_word_pos = last_parsed_word_pos # последняя разобранная словоформа. Перед первым запуском NextWordSearcher тройки с ней надо удалить из triples
         self.last_parsed_word_var = last_parsed_word_var
         self.unparsed_wordforms = unparsed_wordforms
         self.first_use = True
@@ -108,25 +108,25 @@ class NextWordSearcher:
         if self.first_use:
             self.first_use = False
             self.prepare_last_parsed()
-        if len(self.main_dep_pattern) == 0:
+        if len(self.triples) == 0:
             return None
         best_triple_index = 0
-        best_triple = self.main_dep_pattern[0]
-        for i in range(len(self.main_dep_pattern)):
-            if self.main_dep_pattern[i][2] > best_triple[2]:
-                best_triple_index, best_triple = i, self.main_dep_pattern[i]
-        (best_main_pos, (best_dep_pos, best_dep_var), best_gp) = self.main_dep_pattern[best_triple_index]
-        self.main_dep_pattern.pop(best_triple_index)
+        best_triple = self.triples[0]
+        for i in range(len(self.triples)):
+            if self.triples[i][2] > best_triple[2]:
+                best_triple_index, best_triple = i, self.triples[i]
+        (best_main_pos, (best_dep_pos, best_dep_var), best_gp) = self.triples[best_triple_index]
+        self.triples.pop(best_triple_index)
         return best_main_pos, best_gp, best_dep_pos, best_dep_var
 
     def prepare_last_parsed(self):
         # удаляем тройки, где новое разобранное слово - зависимое
-        self.main_dep_pattern = [(main_pos, (dep_pos, dep_var), pattern) 
-            for (main_pos, (dep_pos, dep_var), pattern) in self.main_dep_pattern if dep_pos != self.last_parsed_word_pos]
+        self.triples = [(main_pos, (dep_pos, dep_var), pattern)
+            for (main_pos, (dep_pos, dep_var), pattern) in self.triples if dep_pos != self.last_parsed_word_pos]
 
         self.unparsed_wordforms = [(word_pos, word_var) for (word_pos, word_var) in self.unparsed_wordforms if word_pos != self.last_parsed_word_pos]
         # создаем новые тройки с новым разобранным словом, как с главным
-        self.main_dep_pattern += [(self.last_parsed_word_pos, (dep_pos, dep_var), g_p) for (dep_pos, dep_var) in self.unparsed_wordforms
+        self.triples += [(self.last_parsed_word_pos, (dep_pos, dep_var), g_p) for (dep_pos, dep_var) in self.unparsed_wordforms
             for g_p in self.sentence_info.get_word_by_pos(self.last_parsed_word_pos).get_forms()[self.last_parsed_word_var].get_patterns()
             if self.is_satisfied_to_gp(dep_pos, dep_var, g_p)]
 

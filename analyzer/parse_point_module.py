@@ -13,6 +13,8 @@ from patterns import GPattern
 from visualize import ParsePointView, ParsePointTreeView
 from word_module import Word
 
+MAX_PARSING_TIME = 60
+
 class WordInSentence:
     def __init__(self, number_in_sentence: int):
         self.parsed = False
@@ -85,10 +87,10 @@ class HomogeneousGroup:
 class ParsePoint:
     direct_for_is_applicable = 1
 
-    def __init__(self, pp_words, next_word_searcher, status,
+    def __init__(self, pp_words, status,
                  parsed, point_number, parsed_words, potential_conjs, sentence_info):
         self.pp_words = pp_words
-        self.next_word_searcher = next_word_searcher
+        self.next_word_searcher = None
         self.status = status
         self.parsed = parsed
         self.point_number = point_number
@@ -151,19 +153,16 @@ class ParsePoint:
     def close(self):
         self.status = 'intermediate-close'
 
+
     def create_firsts_pp(self, main_pos, main_var, max_point_number):
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[main_pos].fix_morph_variant(main_var)
-        unparsed_wordforms = [(i, j) for i in range(self.sentence_info.get_count_of_words())
-                              for j in range(len(self.sentence_info.get_word_by_pos(i).forms))]
 
-        new_next_word_searcher = NextWordSearcher(self.sentence_info, [], main_pos, main_var, unparsed_wordforms)
         new_parsed = copy.deepcopy(self.parsed)
         new_point_number = max_point_number + 1
         new_parsed_words = set([main_pos])
         new_potential_conjs = copy.deepcopy(self.potential_conjs)
-        new_parse_point = ParsePoint(pp_words=new_pp_words, next_word_searcher=new_next_word_searcher,
-                                     status=self.status, parsed=new_parsed, point_number=new_point_number,
+        new_parse_point = ParsePoint(pp_words=new_pp_words, status=self.status, parsed=new_parsed, point_number=new_point_number,
                                      parsed_words=new_parsed_words,
                                      potential_conjs=new_potential_conjs, sentence_info=self.sentence_info)
 
@@ -173,7 +172,15 @@ class ParsePoint:
         new_parse_point.create_status()
         return new_parse_point
 
-    def find_first_word(self, fun):
+    def create_dotted_edges_from_first_pp(self, first_pos: int, first_variant: int, all_wordforms: [(int, int)]):
+        '''Создает ребра от точки разбора root.
+        Выписываются тройки (разобранное слово, неразобранное слово, модель управления), применимые в данной точке разбора'''
+
+        #first_pos, first_variant - первая разобранная словоформа
+        self.next_word_searcher = NextWordSearcher(self.sentence_info, [],
+                                                  first_pos, first_variant, all_wordforms)
+
+    def find_first_word(self, root_pp, fun):
         max_point_number = self.point_number
         list_new_parse_points = []
         for word_position in range(len(self.pp_words)):
@@ -182,6 +189,9 @@ class ParsePoint:
                 cur_morph = cur_point_word_forms[variant_number].morph
                 if fun(cur_morph):
                     new_parse_point = self.create_firsts_pp(word_position, variant_number, max_point_number)
+                    all_wordforms = [(i, j) for i in range(self.sentence_info.get_count_of_words())
+                              for j in range(len(self.sentence_info.get_word_by_pos(i).forms))]
+                    new_parse_point.create_dotted_edges_from_first_pp(word_position, variant_number, all_wordforms)
                     max_point_number += 1
                     list_new_parse_points.append(new_parse_point)
         return list_new_parse_points
@@ -189,15 +199,19 @@ class ParsePoint:
     def find_best_gp(self):
         return self.next_word_searcher.next()
 
+    def create_dotted_edges(self, parent_point, new_word_pos, new_dep_variant):
+        '''Выписываются тройки (разобранное слово, неразобранное слово, модель управления), применимые в данной точке разбора'''
+        #new_word_pos, new_dep_variant - разобранная словоформа, на которую точка разбора отличается от родительской
+        self.next_word_searcher = NextWordSearcher(self.sentence_info, parent_point.next_word_searcher.triples,
+                                                  new_word_pos, new_dep_variant,
+                                                  parent_point.next_word_searcher.unparsed_wordforms)
+
+
     def create_child_parse_point(self, max_point_number, main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant):
         """create and return new child ParsePoint"""
 
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[depending_pp_word_pos].fix_morph_variant(dep_variant)
-
-        new_next_word_searcher = NextWordSearcher(self.sentence_info, self.next_word_searcher.main_dep_pattern,
-                                                  depending_pp_word_pos, dep_variant,
-                                                  self.next_word_searcher.unparsed_wordforms)
 
         new_parsed = copy.deepcopy(self.parsed)
         new_parsed.append((main_pp_word_pos, depending_pp_word_pos))
@@ -211,8 +225,7 @@ class ParsePoint:
 
         # TODO сначала вместо view - None, потом ставим его вручную...
 
-        new_parse_point = ParsePoint(pp_words=new_pp_words, next_word_searcher=new_next_word_searcher,
-                                     status=self.status,
+        new_parse_point = ParsePoint(pp_words=new_pp_words, status=self.status,
                                      parsed=new_parsed, point_number=new_point_number, parsed_words=new_parsed_words,
                                      potential_conjs=new_potential_conjs, sentence_info=self.sentence_info)
 
@@ -363,9 +376,11 @@ class Sentence:
                 potential_conjs.add(number)
             pp_words.append(WordInSentence(number))
         sentence_info = SentenceInfo(words)
-        pp = ParsePoint(pp_words=pp_words, next_word_searcher=None, status='intermediate', parsed=[],
+        pp = ParsePoint(pp_words=pp_words, status='intermediate', parsed=[],
                         point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
                         sentence_info=sentence_info)
+        # Из root_pp пунктирные ребра не проводятся.
+        # Они сразу строятся, как невыбранные сплошные ребра, соединяющие root и ТР с одним разобранным словом
         view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
         pp.set_view(view)
         return pp, sentence_info
@@ -406,17 +421,17 @@ class Sentence:
 
     def create_first_parse_points(self):
 
-        verb_res = self.root_p_p.find_first_word(lambda m: m.s_cl == 'verb')
+        verb_res = self.root_p_p.find_first_word(self.root_p_p, lambda m: m.s_cl == 'verb')
         if verb_res:
             list_new_parse_points = verb_res
         else:
             # в предложении нет глагола
             noun_res = \
-                self.root_p_p.find_first_word(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative')
+                self.root_p_p.find_first_word(self.root_p_p, lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative')
             if noun_res:
                 list_new_parse_points = noun_res
             else:
-                prep_res = self.root_p_p.find_first_word(lambda m: m.s_cl == 'preposition')
+                prep_res = self.root_p_p.find_first_word(self.root_p_p, lambda m: m.s_cl == 'preposition')
                 if prep_res:
                     list_new_parse_points = prep_res
                 else:
@@ -449,24 +464,21 @@ class Sentence:
     def sint_parse(self):
         begin_time = timer()
         while True:
-            d = timer() - begin_time
-            # print(d)
-            if d > 60:
+            if timer() - begin_time > MAX_PARSING_TIME:
                 return "timeEnd"  # toDo не None !!!
             best_parse_point = self.get_best_parse_point()
-            if best_parse_point is None:
-                # print("Не разобрано!")
+            if best_parse_point is None: #Больше разборов нет
                 return None
             res1 = best_parse_point.find_best_gp()
-            # print(res)
             if res1 is None:
                 self.close_point()
                 self.view.close_node(best_parse_point.view.point_label)
             else:
                 main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant = res1
-                res2 = best_parse_point.create_child_parse_point(self.max_number_parse_point, \
+                res2 = best_parse_point.create_child_parse_point(self.max_number_parse_point,
                         main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant)
                 (new_point, pattern, word_pair_text) = res2
+                new_point.create_dotted_edges(best_parse_point, depending_pp_word_pos, dep_variant)
                 self.graph.add_node(new_point.point_number)
                 self.graph.add_edge(best_parse_point.point_number, new_point.point_number)
                 self.graph_id_parse_point[new_point.point_number] = new_point
