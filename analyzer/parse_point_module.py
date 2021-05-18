@@ -13,19 +13,12 @@ from patterns import GPattern
 from visualize import ParsePointView, ParsePointTreeView
 from word_module import Word
 
-
-class Gp:
-    def __init__(self, mod, dw):
-        self.model = mod
-        self.dep_word = dw
-
-
 class WordInSentence:
-    def __init__(self, number):
+    def __init__(self, number_in_sentence: int):
         self.parsed = False
         self.used_morph_answer = None  # номер варианта разбора для разобранных слов
         self.used_gp = []  # типа Gp
-        self.number_in_sentence = number
+        self.number_in_sentence = number_in_sentence
 
     def __repr__(self):
         if self.parsed:
@@ -51,10 +44,17 @@ class WordInSentence:
         new_gp = Gp(pattern, dep_word)
         self.used_gp.append(new_gp)
 
+class Gp:
+    def __init__(self, mod: GPattern, dw: WordInSentence):
+        self.model = mod
+        self.dep_word = dw
+
+    def get_dep_word(self):
+        return self.dep_word
 
 class SentenceInfo:
-    def __init__(self, words):
-        self.words = words  # список элементов типа Word
+    def __init__(self, words: [Word]):
+        self.words = words
 
     def get_form_info(self, word: WordInSentence):
         if word.parsed:
@@ -73,18 +73,20 @@ class SentenceInfo:
     def get_count_of_words(self):
         return len(self.words)
 
+    def get_word_texts(self) -> [str]:
+        '''возвращает список слов из предложения'''
+        return [w.get_text() for w in self.words]
 
 class HomogeneousGroup:
-    def __init__(self, words: WordInSentence, title):
+    def __init__(self, words: [str], title):
         self.words = words
         self.title = title
-
 
 class ParsePoint:
     direct_for_is_applicable = 1
 
     def __init__(self, pp_words, next_word_searcher, status,
-                 parsed, point_number, parsed_words, potential_conjs, punctuations_ind, sentence_info):
+                 parsed, point_number, parsed_words, potential_conjs, sentence_info):
         self.pp_words = pp_words
         self.next_word_searcher = next_word_searcher
         self.status = status
@@ -92,7 +94,6 @@ class ParsePoint:
         self.point_number = point_number
         self.parsed_words = parsed_words
         self.potential_conjs = potential_conjs
-        self.punctuations_ind = punctuations_ind
         self.view = None
         self.sentence_info = sentence_info  # TODO переделать! sentence_info лежит везде
 
@@ -144,7 +145,8 @@ class ParsePoint:
             точку разбора со всеми возможными несоюзными вариантами '''
         # Сейчас закрепляем первый союзный вариант разбора
         for conj_ind in self.potential_conjs - self.parsed_words:
-            self.pp_words[conj_ind].fix_morph_variant(self.pp_words[conj_ind].word.first_conj_variant())
+            conj_variant_num = self.sentence_info.get_word_by_pos(conj_ind).first_conj_variant()
+            self.pp_words[conj_ind].fix_morph_variant(conj_variant_num)
 
     def close(self):
         self.status = 'intermediate-close'
@@ -163,8 +165,7 @@ class ParsePoint:
         new_parse_point = ParsePoint(pp_words=new_pp_words, next_word_searcher=new_next_word_searcher,
                                      status=self.status, parsed=new_parsed, point_number=new_point_number,
                                      parsed_words=new_parsed_words,
-                                     potential_conjs=new_potential_conjs, punctuations_ind=self.punctuations_ind,
-                                     sentence_info=self.sentence_info)
+                                     potential_conjs=new_potential_conjs, sentence_info=self.sentence_info)
 
         main_word = new_parse_point.pp_words[main_pos]
         new_view = self.view.create_child_view(new_parse_point, main_word)
@@ -208,14 +209,12 @@ class ParsePoint:
 
         new_view = copy.deepcopy(self.view)
 
-        # punctuations_ind - общее, тк пунктуация общая, 
         # TODO сначала вместо view - None, потом ставим его вручную...
 
         new_parse_point = ParsePoint(pp_words=new_pp_words, next_word_searcher=new_next_word_searcher,
                                      status=self.status,
                                      parsed=new_parsed, point_number=new_point_number, parsed_words=new_parsed_words,
-                                     potential_conjs=new_potential_conjs, punctuations_ind=self.punctuations_ind,
-                                     sentence_info=self.sentence_info)
+                                     potential_conjs=new_potential_conjs, sentence_info=self.sentence_info)
 
         new_parse_point.pp_words[main_pp_word_pos].add_gp(g_pattern_to_apply,
                                                           new_parse_point.pp_words[depending_pp_word_pos])
@@ -236,7 +235,6 @@ class ParsePoint:
         # TODO неразобранные союзы могут быть и союзами, и нет
         for cur_point_word in self.pp_words:
             if not cur_point_word.parsed:
-                print(type(cur_point_word.word.forms[0].morph.s_cl))
                 if next((x for x in cur_point_word.word.forms if x.morph.s_cl == 'conjunction'), None) is not None:
                     # один из вариантов разбора неразобранного слова - союз
                     continue
@@ -292,8 +290,9 @@ class ParsePoint:
                 changes += len(descendants[node]) - old_count
         return descendants
 
-    def create_homogeneous_title(self, homogeneous, descendants):
-        words = [w.word.word_text for w in self.pp_words]
+    def create_homogeneous_title(self, homogeneous: [Gp], descendants,
+                                 punctuation_indexes: [WordInSentence]): #descendants: {WordInSentence: set(WordInSentence)}
+        words = self.sentence_info.get_word_texts()
         for ind in range(len(homogeneous)):
             h = homogeneous[ind].dep_word
             for d in descendants[h]:
@@ -302,29 +301,31 @@ class ParsePoint:
         title = ''
         for i in range(len(words)):
             title += words[i]
-            if i in self.punctuations_ind:
-                title += self.punctuations_ind[i]
+            if i in punctuation_indexes:
+                title += punctuation_indexes[i]
             else:
                 title += " "
         return re.match('\D*(\d.*\d)\D*', title).groups()[0]
 
-    def merge_homogeneous(self):
-        descendants = self.find_descendants()
+    def merge_homogeneous(self, punctuation_indexes):
+        descendants = self.find_descendants() #{WordInSentence: set(WordInSentence)}
         comp_fun = lambda x: self.sentence_info.get_word(x.dep_word).get_forms()[
             x.dep_word.used_morph_answer].morph.get_homogeneous_params()
         new_used_gp = []
         homogeneous_nodes = []
         for main in self.pp_words:
             for key, group_items in groupby(sorted(main.used_gp, key=comp_fun), key=comp_fun):
-                group_items_list = sorted(list(group_items), key=lambda x: x.dep_word.number_in_sentence)
+                group_items_list = sorted(list(group_items), key=lambda x: x.dep_word.number_in_sentence) #[Gp]
                 if len(group_items_list) > 1:
-                    title = self.create_homogeneous_title(group_items_list, descendants)
-                    h = HomogeneousGroup(group_items_list, title) #TODO исправить!
+                    title = self.create_homogeneous_title(group_items_list, descendants, punctuation_indexes)
+                    dep_word_texts = [self.sentence_info.get_text(gp.get_dep_word()) for gp in group_items_list]
+                    h = HomogeneousGroup(dep_word_texts, title)
                     new_used_gp.append(h)
-                    homogeneous_nodes.append((main, h))
+                    main_text = self.sentence_info.get_text(main)
+                    homogeneous_nodes.append((main_text, h))
                 else:
                     new_used_gp.append(group_items_list)
-        main.used_gp = new_used_gp # TODO что это?
+            main.used_gp = new_used_gp
         return homogeneous_nodes
 
 
@@ -333,15 +334,13 @@ class Sentence:
         self.best_parse_points = []  # хранится список точек разбора, упорядоченных по убыванию оценки
         self.max_number_parse_point = 0
 
-        word_list, sent_title, punctuatuon_ind = self.split_string(input_str)
-        self.sent_title_numb = sent_title
+        word_list, self.sent_title_numb, self.punctuation_indexes = self.split_string(input_str)
         self.sent_title_without_numb = input_str
-        self.punctuatuon_ind = punctuatuon_ind  # индексы,
         con = psycopg2.connect(dbname='gpatterns', user='postgres',
                                password='postgres', host='localhost', port='5433')
         morph_analyzer = pymorphy2.MorphAnalyzer()
         self.root_p_p, self.sentence_info = self.create_root_pp(word_list, con, morph_analyzer,
-                                                                self.sent_title_without_numb, self.punctuatuon_ind)
+                                                                self.sent_title_without_numb)
         self.view = ParsePointTreeView(self.sent_title_numb, self.root_p_p.view)
         self.graph = nx.DiGraph()
         self.graph.add_node(0)
@@ -353,7 +352,7 @@ class Sentence:
     def __repr__(self):
         return self.sent_title_without_numb
 
-    def create_root_pp(self, word_texts, con, morph_analyzer, sent_title, punctuations_ind):
+    def create_root_pp(self, word_texts, con, morph_analyzer, sent_title):
         pp_words = []  # [WordInSentence]
         words = []  # [Word]
         potential_conjs = set()
@@ -366,7 +365,6 @@ class Sentence:
         sentence_info = SentenceInfo(words)
         pp = ParsePoint(pp_words=pp_words, next_word_searcher=None, status='intermediate', parsed=[],
                         point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
-                        punctuations_ind=punctuations_ind,
                         sentence_info=sentence_info)
         view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
         pp.set_view(view)
@@ -476,7 +474,7 @@ class Sentence:
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
                 if new_point.status == 'right' or new_point.status == 'right_with_conjs':
                     print(new_point.status)
-                    homogeneous_nodes = new_point.merge_homogeneous()
+                    homogeneous_nodes = new_point.merge_homogeneous(self.punctuation_indexes)
                     new_point.view.merge_homogeneous(homogeneous_nodes)
                     return new_point
                 else:

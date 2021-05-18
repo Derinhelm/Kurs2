@@ -187,15 +187,13 @@ class ParsePointView:
     def merge_homogeneous(self, homogeneous_nodes):
         '''В визуализации создаем узлы для однородных'''
         num = 1
-        for main, h in homogeneous_nodes:
+        for main_text, h in homogeneous_nodes:
             self.graph.add_node(h.title)
             num += 1
-            main_title = main.word.word_text
-            for c in h.words:
-                dep_title = c.dep_word.word.word_text
+            for dep_title in h.words:
                 self.graph.add_edge(h.title, dep_title)
-                self.graph.remove_edge(main_title, dep_title)
-            self.graph.add_edge(main_title, h.title)
+                self.graph.remove_edge(main_text, dep_title)
+            self.graph.add_edge(main_text, h.title)
 
 
 class ParsePointTreeView:
