@@ -56,8 +56,20 @@ class Gp:
 
 class SentenceInfo:
     '''Хранит информацию о вариантах разбора каждого слова из предложения.'''
-    def __init__(self, words: [Word]):
-        self.words = words
+    def __init__(self, input_str: str):
+        word_texts, self.sent_title_with_numbers, self.punctuation_indexes = self.split_string(input_str)
+        self.sent_title_without_numb = input_str
+        con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                               password='postgres', host='localhost', port='5433')
+        morph_analyzer = pymorphy2.MorphAnalyzer()
+        self.words = []  # [Word]
+        for word_text in word_texts:
+            word_info = Word(con, morph_analyzer, word_text)
+            self.words.append(word_info)
+        con.close()
+
+    def __repr__(self):
+        return self.sent_title_without_numb
 
     def get_form_info(self, word: WordInSentence):
         if word.parsed:
@@ -83,6 +95,43 @@ class SentenceInfo:
     def get_words(self):
         return self.words
 
+    def get_sent_title_with_numbers(self):
+        return self.sent_title_with_numbers
+
+    def get_word_parsing_variant(self, word: WordInSentence):
+        return self.get_form_info(word)
+
+    def split_string(self, input_str):
+        # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
+        #: ; " ' началом предложения, запятой, (   ) тире вообще не учитываем(оно отделено пробелами),
+        # дефис только в словах очень-очень и тп,
+        punctuation = [' ', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
+        punct_indexes = {}
+        cur_word = ""
+        word_list = []
+        for i in range(len(input_str)):
+            cur_symbol = input_str[i]
+            if (cur_symbol in punctuation) or (
+                    cur_symbol == '.' and (i == len(input_str) - 1 or input_str[i + 1] not in punctuation)):
+                # (cur_symbol == '.' ... - точка, но не сокращение
+                if len(cur_word) != 0:
+                    word_list.append(cur_word.lower())
+                    if cur_symbol != ' ':
+                        punct_indexes[len(word_list) - 1] = cur_symbol
+                    cur_word = ""
+            elif cur_symbol != '-' or (len(cur_word) != 0):  # - и непустое слово -  это дефис
+                cur_word = cur_word + cur_symbol
+        if len(cur_word) != 0:
+            word_list.append(cur_word.lower())
+
+        s = ""
+        for i in range(len(word_list)):
+            s += word_list[i] + "_" + str(i) + " "
+        return word_list, s[:-1] + input_str[-1], punct_indexes
+
+    def get_punctuation_indexes(self):
+        return self.punctuation_indexes
+
 class HomogeneousGroup:
     def __init__(self, words: [str], title):
         self.words = words
@@ -102,6 +151,7 @@ class ParsePoint:
         self.potential_conjs = potential_conjs
         self.view = None
         self.sentence_info = sentence_info  # TODO переделать! sentence_info лежит везде
+
 
     def __repr__(self):
         ans = str(self.point_number) + ":"
@@ -372,84 +422,20 @@ class ParsePoint:
                     sys.exit()
         return list_new_parse_points
 
-class Sentence:
-    def __init__(self, input_str):
-        word_list, self.sent_title_with_numbers, self.punctuation_indexes = self.split_string(input_str)
-        self.sent_title_without_numb = input_str
-        con = psycopg2.connect(dbname='gpatterns', user='postgres',
-                               password='postgres', host='localhost', port='5433')
-        morph_analyzer = pymorphy2.MorphAnalyzer()
-        self.sentence_info = self.create_sentence_info(word_list, con, morph_analyzer)
-        con.close()
-
-    def get_sent_title_with_numbers(self):
-        return self.sent_title_with_numbers
-
-    def get_sentence_info(self):
-        return self.sentence_info
-
-    def __repr__(self):
-        return self.sent_title_without_numb
-
-    def create_sentence_info(self, word_texts, con, morph_analyzer):
-        words = []  # [Word]
-        for number in range(len(word_texts)):
-            word_info = Word(con, morph_analyzer, word_texts[number])
-            words.append(word_info)
-        return SentenceInfo(words)
-
-    def get_word_parsing_variant(self, word: WordInSentence):
-        return self.sentence_info.get_form_info(word)
-
-    def get_text(self, word: WordInSentence):
-        return self.sentence_info.get_text(word)
-
-    def split_string(self, input_str):
-        # слово в предложении - все, отделенное пробелом, точкой, ? ! ...(смотрим только на первую .)
-        #: ; " ' началом предложения, запятой, (   ) тире вообще не учитываем(оно отделено пробелами),
-        # дефис только в словах очень-очень и тп,
-        punctuation = [' ', '?', '!', ':', ';', '\'', '\"', ',', '(', ')']
-        punct_indexes = {}
-        cur_word = ""
-        word_list = []
-        for i in range(len(input_str)):
-            cur_symbol = input_str[i]
-            if (cur_symbol in punctuation) or (
-                    cur_symbol == '.' and (i == len(input_str) - 1 or input_str[i + 1] not in punctuation)):
-                # (cur_symbol == '.' ... - точка, но не сокращение
-                if len(cur_word) != 0:
-                    word_list.append(cur_word.lower())
-                    if cur_symbol != ' ':
-                        punct_indexes[len(word_list) - 1] = cur_symbol
-                    cur_word = ""
-            elif cur_symbol != '-' or (len(cur_word) != 0):  # - и непустое слово -  это дефис
-                cur_word = cur_word + cur_symbol
-        if len(cur_word) != 0:
-            word_list.append(cur_word.lower())
-
-        s = ""
-        for i in range(len(word_list)):
-            s += word_list[i] + "_" + str(i) + " "
-        return word_list, s[:-1] + input_str[-1], punct_indexes
-
-    def get_punctuation_indexes(self):
-        return self.punctuation_indexes
-
-
 class Tree:
     '''Хранится дерево точек разбора'''
     def __init__(self, input_str):
-        self.ling_info = Sentence(input_str)
+        self.sentence_info = SentenceInfo(input_str)
 
-        root_p_p = self.create_root_pp(self.ling_info.get_sentence_info(), self.ling_info.get_sent_title_with_numbers())
+        root_p_p = self.create_root_pp(self.sentence_info, self.sentence_info.get_sent_title_with_numbers())
 
-        self.view = ParsePointTreeView(self.ling_info.get_sent_title_with_numbers(), root_p_p.view)
+        self.view = ParsePointTreeView(self.sentence_info.get_sent_title_with_numbers(), root_p_p.view)
 
         self.graph = nx.DiGraph()
         self.graph.add_node(0)
         self.graph_id_parse_point = {0: root_p_p}
 
-        pps_with_one_parsed_word = root_p_p.create_first_parse_points(self.ling_info.get_sentence_info()) # [ParsePoint]
+        pps_with_one_parsed_word = root_p_p.create_first_parse_points(self.sentence_info) # [ParsePoint]
 
         for new_parse_point in pps_with_one_parsed_word:
             self.add_new_parse_point_into_graph(root_p_p, new_parse_point)
@@ -503,10 +489,10 @@ class Tree:
         self.graph_id_parse_point[child_point.point_number] = child_point
 
     def get_word_parsing_variant(self, word: WordInSentence):
-        return self.ling_info.get_word_parsing_variant(word)
+        return self.sentence_info.get_word_parsing_variant(word)
 
     def get_text(self, word: WordInSentence):
-        return self.ling_info.get_text(word)
+        return self.sentence_info.get_text(word)
 
     def sint_parse(self):
         begin_time = timer()
@@ -532,7 +518,7 @@ class Tree:
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
                 if new_point.status == 'right' or new_point.status == 'right_with_conjs':
                     print(new_point.status)
-                    homogeneous_nodes = new_point.merge_homogeneous(self.ling_info.get_punctuation_indexes())
+                    homogeneous_nodes = new_point.merge_homogeneous(self.sentence_info.get_punctuation_indexes())
                     new_point.view.merge_homogeneous(homogeneous_nodes)
                     return new_point
                 else:
