@@ -109,6 +109,9 @@ class ParsePoint:
             ans += str(i[0]) + "+" + str(i[1]) + ";"
         return ans
 
+    def get_point_number(self):
+        return self.point_number
+
     def set_view(self, view):
         self.view = view
 
@@ -158,7 +161,8 @@ class ParsePoint:
         self.status = 'intermediate-close'
 
 
-    def create_firsts_pp(self, main_pos, main_var, max_point_number):
+    def create_first_pp(self, main_pos: int, main_var: int, max_point_number: int):
+        '''Создает точку разбора с одним разобранным словом'''
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[main_pos].fix_morph_variant(main_var)
 
@@ -184,17 +188,20 @@ class ParsePoint:
         self.next_word_searcher = NextWordSearcher(self.sentence_info, [],
                                                   first_pos, first_variant, all_wordforms)
 
-    def find_first_word(self, root_pp, fun):
+    def find_first_word(self, fun, sentence_info):
+        '''Среди слов предложения ищет варианты разбора, удовлетворяющие требованиям (например, глагольным и тп).
+        Создает для каждого подходящего варианта разбора такие точки разбора, в которых для этого слова закреплен этот вариант разбора.
+        В этих точках разбора разобрано ровно одно слово'''
         max_point_number = self.point_number
         list_new_parse_points = []
         for word_position in range(len(self.pp_words)):
-            cur_point_word_forms = self.sentence_info.get_word(self.pp_words[word_position]).get_forms()
+            cur_point_word_forms = sentence_info.get_word(self.pp_words[word_position]).get_forms()
             for variant_number in range(len(cur_point_word_forms)):
                 cur_morph = cur_point_word_forms[variant_number].morph
                 if fun(cur_morph):
-                    new_parse_point = self.create_firsts_pp(word_position, variant_number, max_point_number)
-                    all_wordforms = [(i, j) for i in range(self.sentence_info.get_count_of_words())
-                              for j in range(len(self.sentence_info.get_word_by_pos(i).forms))]
+                    new_parse_point = self.create_first_pp(word_position, variant_number, max_point_number)
+                    all_wordforms = [(i, j) for i in range(sentence_info.get_count_of_words())
+                              for j in range(len(sentence_info.get_word_by_pos(i).forms))]
                     new_parse_point.create_dotted_edges_from_first_pp(word_position, variant_number, all_wordforms)
                     max_point_number += 1
                     list_new_parse_points.append(new_parse_point)
@@ -211,7 +218,7 @@ class ParsePoint:
                                                   parent_point.next_word_searcher.unparsed_wordforms)
 
 
-    def create_child_parse_point(self, max_point_number, main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant):
+    def create_child_parse_point(self, count_of_unroot_parse_points, main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant):
         """create and return new child ParsePoint"""
 
         new_pp_words = copy.deepcopy(self.pp_words)
@@ -219,7 +226,7 @@ class ParsePoint:
 
         new_parsed = copy.deepcopy(self.parsed)
         new_parsed.append((main_pp_word_pos, depending_pp_word_pos))
-        new_point_number = max_point_number + 1
+        new_point_number = count_of_unroot_parse_points + 1
 
         new_parsed_words = copy.deepcopy(self.parsed_words)
         new_parsed_words.add(depending_pp_word_pos)
@@ -345,26 +352,41 @@ class ParsePoint:
             main.used_gp = new_used_gp
         return homogeneous_nodes
 
+    def create_first_parse_points(self, sentence_info):
+        '''Из начальной root-вершины строит точки разбора с одним разобранным словом'''
+        verb_res = self.find_first_word(lambda m: m.s_cl == 'verb', sentence_info)
+        if verb_res:
+            list_new_parse_points = verb_res
+        else:
+            # в предложении нет глагола
+            noun_res = \
+                self.find_first_word(lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative', sentence_info)
+            if noun_res:
+                list_new_parse_points = noun_res
+            else:
+                prep_res = self.find_first_word(lambda m: m.s_cl == 'preposition', sentence_info)
+                if prep_res:
+                    list_new_parse_points = prep_res
+                else:
+                    print("В предложении нет глагола, сущ в И.п, предлога")
+                    sys.exit()
+        return list_new_parse_points
 
 class Sentence:
     def __init__(self, input_str):
-        self.best_parse_points = []  # хранится список точек разбора, упорядоченных по убыванию оценки
-        self.max_number_parse_point = 0
-
-        word_list, self.sent_title_numb, self.punctuation_indexes = self.split_string(input_str)
+        word_list, self.sent_title_with_numbers, self.punctuation_indexes = self.split_string(input_str)
         self.sent_title_without_numb = input_str
         con = psycopg2.connect(dbname='gpatterns', user='postgres',
                                password='postgres', host='localhost', port='5433')
         morph_analyzer = pymorphy2.MorphAnalyzer()
         self.sentence_info = self.create_sentence_info(word_list, con, morph_analyzer)
-        self.root_p_p = self.create_root_pp(self.sentence_info, self.sent_title_without_numb)
-        self.view = ParsePointTreeView(self.sent_title_numb, self.root_p_p.view)
-        self.graph = nx.DiGraph()
-        self.graph.add_node(0)
-        self.graph_id_parse_point = {0: self.root_p_p}
-        self.create_first_parse_points()
         con.close()
 
+    def get_sent_title_with_numbers(self):
+        return self.sent_title_with_numbers
+
+    def get_sentence_info(self):
+        return self.sentence_info
 
     def __repr__(self):
         return self.sent_title_without_numb
@@ -375,23 +397,6 @@ class Sentence:
             word_info = Word(con, morph_analyzer, word_texts[number])
             words.append(word_info)
         return SentenceInfo(words)
-
-    def create_root_pp(self, sentence_info: SentenceInfo, sent_title: str): # TODO убрать sentence_info, сделать words
-        words = sentence_info.get_words()
-        pp_words = []  # [WordInSentence]
-        potential_conjs = set()
-        for word_number in range(len(words)):
-            if words[word_number].first_conj_variant() is not None:  # у слова есть вариант разбора - союз
-                potential_conjs.add(word_number)
-            pp_words.append(WordInSentence(word_number))
-        pp = ParsePoint(pp_words=pp_words, status='intermediate', parsed=[],
-                        point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
-                        sentence_info=sentence_info)
-        # Из root_pp пунктирные ребра не проводятся.
-        # Они сразу строятся, как невыбранные сплошные ребра, соединяющие root и ТР с одним разобранным словом
-        view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
-        pp.set_view(view)
-        return pp
 
     def get_word_parsing_variant(self, word: WordInSentence):
         return self.sentence_info.get_form_info(word)
@@ -427,47 +432,81 @@ class Sentence:
             s += word_list[i] + "_" + str(i) + " "
         return word_list, s[:-1] + input_str[-1], punct_indexes
 
-    def create_first_parse_points(self):
+    def get_punctuation_indexes(self):
+        return self.punctuation_indexes
 
-        verb_res = self.root_p_p.find_first_word(self.root_p_p, lambda m: m.s_cl == 'verb')
-        if verb_res:
-            list_new_parse_points = verb_res
-        else:
-            # в предложении нет глагола
-            noun_res = \
-                self.root_p_p.find_first_word(self.root_p_p, lambda m: m.s_cl == 'noun' and m.case_morph == 'nominative')
-            if noun_res:
-                list_new_parse_points = noun_res
-            else:
-                prep_res = self.root_p_p.find_first_word(self.root_p_p, lambda m: m.s_cl == 'preposition')
-                if prep_res:
-                    list_new_parse_points = prep_res
-                else:
-                    print("В предложении нет глагола, сущ в И.п, предлога")
-                    sys.exit()
-        for i in range(len(list_new_parse_points)):
-            new_point_id = i + 1
-            self.graph.add_node(new_point_id)
-            self.graph.add_edge(0, new_point_id)
-            child_point = list_new_parse_points[i]
-            self.graph_id_parse_point[new_point_id] = child_point
-            self.view.add_edge(self.root_p_p.view, child_point.view)
-        self.max_number_parse_point = len(list_new_parse_points)
-        # есть корневая точка и len(list_new_parse_points) ее дочерних,
-        self.best_parse_points = copy.deepcopy(list_new_parse_points)
 
-    def insert_new_parse_point(self, new_point):
-        """insert new ParsePoint into best_parse_points"""
-        self.best_parse_points.insert(0, new_point)
+class Tree:
+    '''Хранится дерево точек разбора'''
+    def __init__(self, input_str):
+        self.ling_info = Sentence(input_str)
+
+        root_p_p = self.create_root_pp(self.ling_info.get_sentence_info(), self.ling_info.get_sent_title_with_numbers())
+
+        self.view = ParsePointTreeView(self.ling_info.get_sent_title_with_numbers(), root_p_p.view)
+
+        self.graph = nx.DiGraph()
+        self.graph.add_node(0)
+        self.graph_id_parse_point = {0: root_p_p}
+
+        pps_with_one_parsed_word = root_p_p.create_first_parse_points(self.ling_info.get_sentence_info()) # [ParsePoint]
+
+        for new_parse_point in pps_with_one_parsed_word:
+            self.add_new_parse_point_into_graph(root_p_p, new_parse_point)
+            self.view.add_edge(root_p_p.view, new_parse_point.view) # TODO избыточное создание еще одного графа...
+        # описывает очередность точек разбора для построения дочерних точек разбора
+        # есть корневая точка и len(list_new_parse_points) ее дочерних
+        self.best_parse_points = self.create_best_parse_points(pps_with_one_parsed_word)
+
+    def create_best_parse_points(self, pps_with_one_parsed_words):
+        '''инициализируется список лучших для разбора точек'''
+        # TODO переделать
+        #  пока в список лучших для разбора точек кладем точки разбора с одним разобранным словом
+        return copy.deepcopy(pps_with_one_parsed_words)
+
+    def create_root_pp(self, sentence_info: SentenceInfo, sent_title: str): # TODO убрать sentence_info, сделать words
+        words = sentence_info.get_words()
+        pp_words = []  # [WordInSentence]
+        potential_conjs = set()
+        for word_number in range(len(words)):
+            if words[word_number].first_conj_variant() is not None:  # у слова есть вариант разбора - союз
+                potential_conjs.add(word_number)
+            pp_words.append(WordInSentence(word_number))
+        pp = ParsePoint(pp_words=pp_words, status='intermediate', parsed=[],
+                        point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
+                        sentence_info=sentence_info)
+        # Из root_pp пунктирные ребра не проводятся.
+        # Они сразу строятся, как невыбранные сплошные ребра, соединяющие root и ТР с одним разобранным словом
+        view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
+        pp.set_view(view)
+        return pp
 
     def get_best_parse_point(self):
         if len(self.best_parse_points) == 0:
             return None
         return self.best_parse_points[0]
 
-    def close_point(self):
+    def close_best_point(self):
+        '''Для первой точки разбора из списка лучших построены все дочерние точки разбора. С ней больше ничего нельзя сделать, удаляем ее.'''
         self.best_parse_points[0].close()
         self.best_parse_points.pop(0)
+
+    def insert_new_parse_point(self, new_point):
+        '''Вставка только что построенной точки разбора в очередь на построение из точки разбора дочерних точек разбора'''
+        # TODO сделать вариативность. Сейчас идем от новой точки разбора. Стратегия поиска в глубину
+        self.best_parse_points.insert(0, new_point)
+
+    def add_new_parse_point_into_graph(self, parent_point, child_point):
+        '''Добавляет в граф новую точку разбора'''
+        self.graph.add_node(child_point.point_number)
+        self.graph.add_edge(parent_point.point_number, child_point.point_number)
+        self.graph_id_parse_point[child_point.point_number] = child_point
+
+    def get_word_parsing_variant(self, word: WordInSentence):
+        return self.ling_info.get_word_parsing_variant(word)
+
+    def get_text(self, word: WordInSentence):
+        return self.ling_info.get_text(word)
 
     def sint_parse(self):
         begin_time = timer()
@@ -475,7 +514,7 @@ class Sentence:
             if timer() - begin_time > MAX_PARSING_TIME:
                 return "timeEnd"  # toDo не None !!!
             best_parse_point = self.get_best_parse_point()
-            if best_parse_point is None: #Больше разборов нет
+            if best_parse_point is None:  # Больше разборов нет
                 return None
             res1 = best_parse_point.find_best_gp()
             if res1 is None:
@@ -483,18 +522,17 @@ class Sentence:
                 self.view.close_node(best_parse_point.view.point_label)
             else:
                 main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant = res1
-                res2 = best_parse_point.create_child_parse_point(self.max_number_parse_point,
-                        main_pp_word_pos, g_pattern_to_apply, depending_pp_word_pos, dep_variant)
+                count_of_unroot_parse_points = len(self.graph.nodes) - 1  # root - нулевая точка разбора и еще несколько точек разбора с одним разобранным словом
+                res2 = best_parse_point.create_child_parse_point(count_of_unroot_parse_points=count_of_unroot_parse_points,
+                        main_pp_word_pos=main_pp_word_pos, g_pattern_to_apply=g_pattern_to_apply,
+                        depending_pp_word_pos=depending_pp_word_pos, dep_variant=dep_variant)
                 (new_point, pattern, word_pair_text) = res2
                 new_point.create_dotted_edges(best_parse_point, depending_pp_word_pos, dep_variant)
-                self.graph.add_node(new_point.point_number)
-                self.graph.add_edge(best_parse_point.point_number, new_point.point_number)
-                self.graph_id_parse_point[new_point.point_number] = new_point
-                self.max_number_parse_point += 1
+                self.add_new_parse_point_into_graph(best_parse_point, new_point)
                 self.view.add_edge(best_parse_point.view, new_point.view, pattern, word_pair_text)
                 if new_point.status == 'right' or new_point.status == 'right_with_conjs':
                     print(new_point.status)
-                    homogeneous_nodes = new_point.merge_homogeneous(self.punctuation_indexes)
+                    homogeneous_nodes = new_point.merge_homogeneous(self.ling_info.get_punctuation_indexes())
                     new_point.view.merge_homogeneous(homogeneous_nodes)
                     return new_point
                 else:

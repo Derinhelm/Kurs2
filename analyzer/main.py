@@ -1,10 +1,10 @@
 
-from parse_point_module import Sentence
+from parse_point_module import Tree
 import copy
 
 def parse(str1, count = 1):
     # toDo - а, если нет разбора ?
-    s = Sentence(str1)
+    s = Tree(str1)
     ans = []
     for i in range(count):
         #print("------------------------------------------------------", i)
