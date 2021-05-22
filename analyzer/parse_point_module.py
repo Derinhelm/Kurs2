@@ -55,6 +55,7 @@ class Gp:
         return self.dep_word
 
 class SentenceInfo:
+    '''Хранит информацию о вариантах разбора каждого слова из предложения.'''
     def __init__(self, words: [Word]):
         self.words = words
 
@@ -78,6 +79,9 @@ class SentenceInfo:
     def get_word_texts(self) -> [str]:
         '''возвращает список слов из предложения'''
         return [w.get_text() for w in self.words]
+
+    def get_words(self):
+        return self.words
 
 class HomogeneousGroup:
     def __init__(self, words: [str], title):
@@ -352,8 +356,8 @@ class Sentence:
         con = psycopg2.connect(dbname='gpatterns', user='postgres',
                                password='postgres', host='localhost', port='5433')
         morph_analyzer = pymorphy2.MorphAnalyzer()
-        self.root_p_p, self.sentence_info = self.create_root_pp(word_list, con, morph_analyzer,
-                                                                self.sent_title_without_numb)
+        self.sentence_info = self.create_sentence_info(word_list, con, morph_analyzer)
+        self.root_p_p = self.create_root_pp(self.sentence_info, self.sent_title_without_numb)
         self.view = ParsePointTreeView(self.sent_title_numb, self.root_p_p.view)
         self.graph = nx.DiGraph()
         self.graph.add_node(0)
@@ -365,17 +369,21 @@ class Sentence:
     def __repr__(self):
         return self.sent_title_without_numb
 
-    def create_root_pp(self, word_texts, con, morph_analyzer, sent_title):
-        pp_words = []  # [WordInSentence]
+    def create_sentence_info(self, word_texts, con, morph_analyzer):
         words = []  # [Word]
-        potential_conjs = set()
         for number in range(len(word_texts)):
             word_info = Word(con, morph_analyzer, word_texts[number])
             words.append(word_info)
-            if word_info.first_conj_variant() is not None:  # у слова есть вариант разбора - союз
-                potential_conjs.add(number)
-            pp_words.append(WordInSentence(number))
-        sentence_info = SentenceInfo(words)
+        return SentenceInfo(words)
+
+    def create_root_pp(self, sentence_info: SentenceInfo, sent_title: str): # TODO убрать sentence_info, сделать words
+        words = sentence_info.get_words()
+        pp_words = []  # [WordInSentence]
+        potential_conjs = set()
+        for word_number in range(len(words)):
+            if words[word_number].first_conj_variant() is not None:  # у слова есть вариант разбора - союз
+                potential_conjs.add(word_number)
+            pp_words.append(WordInSentence(word_number))
         pp = ParsePoint(pp_words=pp_words, status='intermediate', parsed=[],
                         point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
                         sentence_info=sentence_info)
@@ -383,7 +391,7 @@ class Sentence:
         # Они сразу строятся, как невыбранные сплошные ребра, соединяющие root и ТР с одним разобранным словом
         view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
         pp.set_view(view)
-        return pp, sentence_info
+        return pp
 
     def get_word_parsing_variant(self, word: WordInSentence):
         return self.sentence_info.get_form_info(word)
