@@ -137,11 +137,28 @@ class HomogeneousGroup:
         self.words = words
         self.title = title
 
+class TripleInfo:
+    ''' Хранит разницу между родительской и дочерней точками разбора
+        При переходе от root-точки разбора к точке разбора с одним разобранным словом считает main_pos=None, pattern=None
+    '''
+    def __init__(self, dep_pos, dep_var, main_pos=None, pattern=None):
+        '''Хранится модель управления, номер главного слова и номер зависимого слова (и выбранного варианта разбора), к которым она применена'''
+        self.main_position = main_pos
+        self.dep_position = dep_pos
+        self.dep_variant = dep_var
+        self.pattern = pattern
+
+    def get_dep_pos(self):
+        return self.dep_position
+
+    def get_dep_var(self):
+        return self.dep_variant
+
 class ParsePoint:
     direct_for_is_applicable = 1
 
     def __init__(self, pp_words, status,
-                 parsed, point_number, parsed_words, potential_conjs, sentence_info):
+                 parsed, point_number, parsed_words, potential_conjs, sentence_info, difference, parent_pp=None):
         self.pp_words = pp_words
         self.next_word_searcher = None
         self.status = status
@@ -151,7 +168,14 @@ class ParsePoint:
         self.potential_conjs = potential_conjs
         self.view = None
         self.sentence_info = sentence_info  # TODO переделать! sentence_info лежит везде
+        self.difference_from_parent = difference
+        self.parent_pp = parent_pp
 
+    def is_dotted_children_created(self):
+        return self.next_word_searcher is not None
+
+    def is_final(self):
+        return self.status == 'right' or self.status == 'right_with_conjs'
 
     def __repr__(self):
         ans = str(self.point_number) + ":"
@@ -211,20 +235,21 @@ class ParsePoint:
         self.status = 'intermediate-close'
 
 
-    def create_first_pp(self, main_pos: int, main_var: int, max_point_number: int):
+    def create_first_pp(self, first_word_pos: int, first_word_var: int, max_point_number: int):
         '''Создает точку разбора с одним разобранным словом'''
         new_pp_words = copy.deepcopy(self.pp_words)
-        new_pp_words[main_pos].fix_morph_variant(main_var)
+        new_pp_words[first_word_pos].fix_morph_variant(first_word_var)
 
         new_parsed = copy.deepcopy(self.parsed)
         new_point_number = max_point_number + 1
-        new_parsed_words = set([main_pos])
+        new_parsed_words = set([first_word_pos])
         new_potential_conjs = copy.deepcopy(self.potential_conjs)
+        difference = TripleInfo(dep_pos=first_word_pos, dep_var=first_word_var)
         new_parse_point = ParsePoint(pp_words=new_pp_words, status=self.status, parsed=new_parsed, point_number=new_point_number,
                                      parsed_words=new_parsed_words,
-                                     potential_conjs=new_potential_conjs, sentence_info=self.sentence_info)
+                                     potential_conjs=new_potential_conjs, sentence_info=self.sentence_info, difference=difference, parent_pp=self)
 
-        main_word = new_parse_point.pp_words[main_pos]
+        main_word = new_parse_point.pp_words[first_word_pos]
         new_view = self.view.create_child_view(new_parse_point, main_word)
         new_parse_point.set_view(new_view)
         new_parse_point.create_status()
@@ -260,11 +285,14 @@ class ParsePoint:
     def find_best_gp(self):
         return self.next_word_searcher.next()
 
-    def create_dotted_edges(self, parent_point, new_word_pos, new_dep_variant):
+    def create_dotted_edges(self):
         '''Выписываются тройки (разобранное слово, неразобранное слово, модель управления), применимые в данной точке разбора'''
         #new_word_pos, new_dep_variant - разобранная словоформа, на которую точка разбора отличается от родительской
+        parent_point = self.parent_pp
+        last_parsed_word_pos = self.difference_from_parent.get_dep_pos()
+        last_parsed_word_var = self.difference_from_parent.get_dep_var()
         self.next_word_searcher = NextWordSearcher(self.sentence_info, parent_point.next_word_searcher.triples,
-                                                  new_word_pos, new_dep_variant,
+                                                  last_parsed_word_pos, last_parsed_word_var,
                                                   parent_point.next_word_searcher.unparsed_wordforms)
 
 
@@ -285,10 +313,10 @@ class ParsePoint:
         new_view = copy.deepcopy(self.view)
 
         # TODO сначала вместо view - None, потом ставим его вручную...
-
+        difference = TripleInfo(dep_pos=depending_pp_word_pos, dep_var=dep_variant, main_pos=main_pp_word_pos, pattern=g_pattern_to_apply)
         new_parse_point = ParsePoint(pp_words=new_pp_words, status=self.status,
                                      parsed=new_parsed, point_number=new_point_number, parsed_words=new_parsed_words,
-                                     potential_conjs=new_potential_conjs, sentence_info=self.sentence_info)
+                                     potential_conjs=new_potential_conjs, sentence_info=self.sentence_info, difference=difference, parent_pp=self)
 
         new_parse_point.pp_words[main_pp_word_pos].add_gp(g_pattern_to_apply,
                                                           new_parse_point.pp_words[depending_pp_word_pos])
@@ -297,6 +325,10 @@ class ParsePoint:
         new_view = self.view.create_child_view(new_parse_point, main_word, dep_word)
         new_parse_point.set_view(new_view)
         new_parse_point.create_status()
+
+        if new_parse_point.is_final():
+            homogeneous_nodes = new_parse_point.merge_homogeneous(self.sentence_info.get_punctuation_indexes())
+            new_parse_point.view.merge_homogeneous(homogeneous_nodes)
 
         # word_pair_text = str(g_pattern_to_apply.get_mark()) + ": " + str(main_pp_word_pos) + " + " + str(depending_pp_word_pos)
         word_pair_text = self.sentence_info.get_word(main_word).get_text() + " + " + self.sentence_info.get_word(
@@ -460,7 +492,7 @@ class Tree:
             pp_words.append(WordInSentence(word_number))
         pp = ParsePoint(pp_words=pp_words, status='intermediate', parsed=[],
                         point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
-                        sentence_info=sentence_info)
+                        sentence_info=sentence_info, difference=None)
         # Из root_pp пунктирные ребра не проводятся.
         # Они сразу строятся, как невыбранные сплошные ребра, соединяющие root и ТР с одним разобранным словом
         view = ParsePointView('root', sent_title, sentence_info, len(pp_words))
@@ -504,12 +536,12 @@ class Tree:
     def get_text(self, word: WordInSentence):
         return self.sentence_info.get_text(word)
 
-    def choose_edge(self, parent_point):
-        '''Из данной точки строим лучшее ребро'''
+    def choose_edge_from_pp(self, parent_point):
+        '''В графе выбираем новое ребро, которое войдет в оптимальный путь. Из данной точки строим лучшее ребро'''
         res1 = parent_point.find_best_gp()
         if res1 is None:
             self.close_best_point() # TODO убрать!
-            return None
+            self.last_created_point = None
         else:
             main_word_pos, g_pattern_to_apply, dep_word_pos, dep_variant = res1
             count_of_unroot_parse_points = len(
@@ -522,24 +554,24 @@ class Tree:
 
             (new_point, pattern, word_pair_text) = res2
             self.add_new_parse_point_into_graph(parent_point, new_point, pattern, word_pair_text)
-            return new_point, dep_word_pos, dep_variant
+            self.insert_new_parse_point_in_best_points(self.last_created_point) # TODO убрать. Сделать полноценный выбор точки разбора
 
     def sint_parse(self):
         begin_time = timer()
-        while True:
-            if timer() - begin_time > MAX_PARSING_TIME:
-                return "timeEnd"  # toDo не None !!!
+        while timer() - begin_time <= MAX_PARSING_TIME:
             best_parse_point = self.get_best_parse_point()
             if best_parse_point is None:  # Больше разборов нет
                 return None
-            else:
-                res2 = self.choose_edge(best_parse_point) # TODO не должен ничего возвращать!
-                if res2 is not None: # TODO а, если None?
-                    new_point, dep_word_pos, dep_variant = res2
-                    new_point.create_dotted_edges(best_parse_point, dep_word_pos, dep_variant)
-                    if new_point.status == 'right' or new_point.status == 'right_with_conjs':
-                        homogeneous_nodes = new_point.merge_homogeneous(self.sentence_info.get_punctuation_indexes())
-                        new_point.view.merge_homogeneous(homogeneous_nodes)
-                        return new_point
-                    else:
-                        self.insert_new_parse_point_in_best_points(new_point)
+
+            if not best_parse_point.is_dotted_children_created():
+                best_parse_point.create_dotted_edges()
+
+            self.choose_edge_from_pp(best_parse_point)
+
+            if self.last_created_point is not None and self.last_created_point.is_final():
+                return self.last_created_point
+
+            if self.last_created_point is not None:
+                self.last_created_point.create_dotted_edges()
+
+        return "timeEnd"  # Сделать на исключениях
