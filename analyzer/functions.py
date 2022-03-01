@@ -4,16 +4,18 @@ from constants import dict_field, NUMBER_MORPH_PARAMETRS
 from patterns import GPattern
 
 
-def create_command(level, where_str):
+def create_command(level, strict, main_morph_params, dep_morph_params, main_word_param, dep_word_param):
+    where_str, params = create_where(strict, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
     if level == 1:
-        return create_command_1(where_str)
-    if level == 2:
-        return create_command_2(where_str)
-    if level == 3:
-        return create_command_3(where_str)
-    print("Ошибка при создании запроса к базе: некорректный уровень МУ (равен", level, ")")
-    exit(1)
-
+        command = create_command_1(where_str)
+    elif level == 2:
+        command = create_command_2(where_str)
+    elif level == 3:
+        command = create_command_3(where_str)
+    else:
+        print("Ошибка при создании запроса к базе: некорректный уровень МУ (равен", level, ")")
+        exit(1)
+    return (command, params)
 
 def create_command_1(where_str):
     return "select null, null, " + \
@@ -134,8 +136,7 @@ def create_where_main_morph(strict, main_morph_params):
 
 def get_patterns_pandas(cursor, level, main_morph_params=None, dep_morph_params=None, main_word_param=None,
                         dep_word_param=None):
-    where, params = create_where(True, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
-    command = create_command(level, where)
+    command, params = create_command(level, True, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
     cursor.execute(command, params)
     res = cursor.fetchall()
     names = ['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective', 'transitive', 'person',
@@ -152,8 +153,7 @@ def get_patterns_pandas(cursor, level, main_morph_params=None, dep_morph_params=
 
 def get_patterns(cursor, level, main_morph_params=None, dep_morph_params=None, main_word_param=None,
                  dep_word_param=None):
-    where, params = create_where(False, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
-    command = create_command(level, where)
+    command, params = create_command(level, False, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
     #print(command)
     #print(params)
     cursor.execute(command, params)
