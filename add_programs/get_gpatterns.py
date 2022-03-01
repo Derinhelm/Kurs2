@@ -1,6 +1,5 @@
-from constants import dict_field, NUMBER_MORPH_PARAMETRS
-from patterns import GPattern
-
+import pandas as pd
+from analyzer.constants import dict_field, NUMBER_MORPH_PARAMETRS
 
 def create_command(level, main_morph_params, dep_morph_params, main_word_param, dep_word_param):
     where_str, params = create_where(main_morph_params, dep_morph_params, main_word_param, dep_word_param)
@@ -108,8 +107,7 @@ def create_where_dep_morph(dep_morph_params):
     where_dep_morph = ""
     for i in range(len(dep_morph_params)):
         cur_param = dep_morph_params[i]
-        s1 = "(dep." + dict_field[cur_param] + " = " + "'" + cur_param + "'"
-        s1 += " or dep." + dict_field[cur_param] + " = " + "'not_imp')"
+        s1 = "(dep." + dict_field[cur_param] + " = " + "'" + cur_param + "')"
         where_dep_morph += s1
         if i != len(dep_morph_params) - 1:
             where_dep_morph += " and "
@@ -119,38 +117,24 @@ def create_where_main_morph(main_morph_params):
     where_main_morph = ""
     for i in range(len(main_morph_params)):
         cur_param = main_morph_params[i]
-        s1 = "(main." + dict_field[cur_param] + " = " + "'" + cur_param + "'"
-        s1 += " or main." + dict_field[cur_param] + " = " + "'not_imp')"
+        s1 = "(main." + dict_field[cur_param] + " = " + "'" + cur_param + "')"
         where_main_morph += s1
         if i != len(main_morph_params) - 1:
             where_main_morph += " and "
     return where_main_morph
 
-
-
-
-def get_patterns(cursor, level, main_morph_params=None, dep_morph_params=None, main_word_param=None,
-                 dep_word_param=None):
+def get_patterns_pandas(cursor, level, main_morph_params=None, dep_morph_params=None, main_word_param=None,
+                        dep_word_param=None):
     command, params = create_command(level, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
-    #print(command)
-    #print(params)
     cursor.execute(command, params)
     res = cursor.fetchall()
-    patterns_list = []
-    for pattern in res:
-        main_constr = []
-        dep_constr = []
-        for i in range(3, NUMBER_MORPH_PARAMETRS + 3):
-            if pattern[i] != 'not_imp':
-                main_constr.append(pattern[i])
-        for i in range(3 + NUMBER_MORPH_PARAMETRS, 3 + 2 * NUMBER_MORPH_PARAMETRS):
-            if pattern[i] != 'not_imp':
-                dep_constr.append(pattern[i])
-        new_pattern = GPattern(level, pattern[0], pattern[1], pattern[2],
-                               main_constr, dep_constr)
-        # toDO
-        if 'preposition' in new_pattern.main_word_constraints and 'adverb' in new_pattern.dependent_word_constraints:
-            print("prep + adverb")
-        else:
-            patterns_list.append(new_pattern)
-    return patterns_list
+    names = ['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective', 'transitive', 'person',
+             'tense', 'voice', 'degree', 'static', 'prep_type']
+    main_names = list(map(lambda x: 'main_' + x, names))
+    dep_names = list(map(lambda x: 'dep_' + x, names))
+    df = pd.DataFrame(res, columns=['main_word', 'dep_word', 'mark'] + main_names + dep_names)
+    for column in df.columns:
+        if (df[column] == 'not_imp').all():
+            df.drop(column, axis='columns', inplace=True)
+    df['mark'] = [round(n, 2) for n in df['mark']]
+    return df

@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QDesktopWidget, QHeaderView, QApplication, QLabel, QGridLayout,
                              QVBoxLayout, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem)
 
-from analyzer.functions import get_patterns_pandas
+from get_gpatterns import get_patterns_pandas
 
 
 class EndWindow(QWidget):
@@ -70,8 +70,8 @@ class BeginWindow(QWidget):
             dep_morph = []
         else:
             dep_morph = dep_morph_s.split(', ')
-        con = psycopg2.connect(dbname='gpatterns_copy', user='postgres',
-                               password='postgres', host='localhost')
+        con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                               password='postgres', host='localhost', port='5432')
         cursor = con.cursor()
         res = get_patterns_pandas(cursor, level, main_morph_params=main_morph, dep_morph_params=dep_morph,
                                   main_word_param=main_word, dep_word_param=dep_word)
