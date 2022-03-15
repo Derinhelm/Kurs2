@@ -2,138 +2,90 @@ from constants import dict_field, NUMBER_MORPH_PARAMETRS
 from patterns import GPattern
 
 
-def create_command(level, main_morph_params, dep_morph_params, main_word_param, dep_word_param):
-    where_str, params = create_where(main_morph_params, dep_morph_params, main_word_param, dep_word_param)
+def create_command(level, main_morph_params, main_word_param):
     if level == 1:
-        command = create_command_1(where_str)
+        command = create_command_1(main_morph_params)
+        params = ()
     elif level == 2:
-        command = create_command_2(where_str)
+        command = create_command_2(main_morph_params)
+        params = (main_word_param,)
     elif level == 3:
-        command = create_command_3(where_str)
+        command = create_command_3(main_morph_params)
+        params = (main_word_param,)
     else:
         print("Ошибка при создании запроса к базе: некорректный уровень МУ (равен", level, ")")
         exit(1)
-    return (command, params)
+    return command, params
 
-def create_command_1(where_str):
-    return "select null, null, " + \
-               "create_mark_1(gp.mark, gp.main_morph, gp.dep_morph) as mark, " + \
-               "main.s_cl, main.animate, main.gender, main.number, main.case_morph, " + \
-               "main.reflection, main.perfective, main.transitive, main.person, main.tense, " + \
-               "main.voice, main.degree, main.static, main.prep_type, " + \
-               "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, " + \
-               "dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, " + \
-               "dep.voice, dep.degree, dep.static, dep.prep_type " + \
-               "from gpattern_1_level as gp " + \
-               "left join morph_constraints as main " + \
-               "on main.id = main_morph " + \
-               "left join morph_constraints as dep " + \
-               "on dep.id = dep_morph " + \
-               where_str + " order by mark desc"
 
-def create_command_2(where_str):
-    return "select main_word.name, null, " + \
-           "create_mark_2(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word) as mark, " + \
-           "main.s_cl, main.animate, main.gender, main.number, main.case_morph, " + \
-           "main.reflection, main.perfective, main.transitive, main.person, " + \
-           "main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
-           "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, " + \
-           "dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, " + \
-           "dep.voice, dep.degree, dep.static, dep.prep_type " + \
-           "from gpattern_2_level as gp " + \
-           "left join morph_constraints as main " + \
-           "on main.id = main_morph " + \
-           "left join morph_constraints as dep " + \
-           "on dep.id = dep_morph " + \
-           "left join word as main_word " + \
-           "on main_word.id = main_word " + \
-           where_str + " order by mark desc"
+def create_command_1(main_morph_params):
+    where_str = create_where_main_morph(main_morph_params)
+    begin = "with " + \
+            "main_morph_t as " + \
+            "(select id, s_cl, animate, gender, number, case_morph, reflection, perfective, transitive, person, tense, voice, degree, static, prep_type from morph_constraints where "
 
-def create_command_3(where_str):
-    return "select main_word.name, dep_word.name, " + \
-           "create_mark_3(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word, gp.dep_word) as mark, " + \
-           "main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, " + \
-           "main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, " + \
-           "dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, " + \
-           "dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
-           "from gpattern_3_level as gp " + \
-           "left join morph_constraints as main " + \
-           "on main.id = main_morph " + \
-           "left join morph_constraints as dep " + \
-           "on dep.id = dep_morph " + \
-           "left join word as main_word " + \
-           "on main_word.id = main_word " + \
-           "left join word as dep_word " + \
-           "on dep_word.id = dep_word " + \
-           where_str + " order by mark desc"
+    end = "), " + \
+          "gp as " + \
+          "(select main_morph, dep_morph, mark from gpattern_1_level where main_morph in (select id from main_morph_t)) " + \
+          "select null, null, create_mark_1(gp.mark, gp.main_morph, gp.dep_morph) as mark, main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
+          "from gp join main_morph_t as main on gp.main_morph=main.id join morph_constraints as dep on gp.dep_morph=dep.id order by mark desc;"
 
-def create_where(main_morph_params, dep_morph_params, main_word_param, dep_word_param):
-    if main_word_param:
-        where_main_word = "main_word.name = %s"
-        if dep_word_param:
-            where_dep_word = "dep_word.name = %s "
-            res = where_main_word + " and " + where_dep_word
-            params = (main_word_param, dep_word_param)
-        else:
-            res = where_main_word
-            params = (main_word_param,)
-    else:
-        if dep_word_param:
-            where_dep_word = "dep_word.name = %s "
-            res = where_dep_word
-            params = (dep_word_param,)
-        else:
-            res = ""
-            params = ()
+    return begin + where_str + end
 
-    if dep_morph_params:
-        where_dep_morph = create_where_dep_morph(dep_morph_params)
-        if res != "":
-            res = where_dep_morph + " and " + res
-        else:
-            res = where_dep_morph
 
-    if main_morph_params:
-        where_main_morph = create_where_main_morph(main_morph_params)
-        if res != "":
-            res = where_main_morph + " and " + res
-        else:
-            res = where_main_morph
+def create_command_2(main_morph_params):
+    where_str = create_where_main_morph(main_morph_params)
 
-    if res != "":
-        res = "where " + res
-    return res, params
+    begin = "with main_morph_t as (select id, s_cl, animate, gender, number, case_morph, reflection, perfective, transitive, person, tense, voice, degree, static, prep_type from morph_constraints where "
 
-def create_where_dep_morph(dep_morph_params):
-    where_dep_morph = ""
-    for i in range(len(dep_morph_params)):
-        cur_param = dep_morph_params[i]
-        s1 = "(dep." + dict_field[cur_param] + " = " + "'" + cur_param + "'"
-        s1 += " or dep." + dict_field[cur_param] + " = " + "'not_imp')"
-        where_dep_morph += s1
-        if i != len(dep_morph_params) - 1:
-            where_dep_morph += " and "
-    return where_dep_morph
+    end = "), " + \
+          "main_word_t as (select id, name from word where name=%s), " + \
+          "gp as (select main_morph, dep_morph, main_word, mark from gpattern_2_level where main_morph in (select id from main_morph_t) and main_word = (select id from main_word_t)) " + \
+          "select main_w.name, null, create_mark_2(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word) as mark, main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
+          "from gp " + \
+          "join main_morph_t as main on gp.main_morph=main.id " + \
+          "join morph_constraints as dep on gp.dep_morph=dep.id " + \
+          "join main_word_t as main_w on gp.main_word=main_w.id " + \
+          "order by mark desc;"
+
+    return begin + where_str + end
+
+
+def create_command_3(main_morph_params):
+    where_str = create_where_main_morph(main_morph_params)
+
+    begin = "with main_morph_t as (select id, s_cl, animate, gender, number, case_morph, reflection, perfective, transitive, person, tense, voice, degree, static, prep_type from morph_constraints where "
+
+    end = "), " + \
+          "main_word_t as (select id, name from word where name=%s)," + \
+          "gp as (select main_morph, dep_morph, main_word, dep_word, mark from gpattern_3_level where main_morph in (select id from main_morph_t) and main_word = (select id from main_word_t)) " + \
+          "select main_w.name, dep_w.name, create_mark_3(gp.mark, gp.main_morph, gp.dep_morph, gp.main_word, gp.dep_word) as mark, main.s_cl, main.animate, main.gender, main.number, main.case_morph, main.reflection, main.perfective, main.transitive, main.person, main.tense, main.voice, main.degree, main.static, main.prep_type, dep.s_cl, dep.animate, dep.gender, dep.number, dep.case_morph, dep.reflection, dep.perfective, dep.transitive, dep.person, dep.tense, dep.voice, dep.degree, dep.static, dep.prep_type " + \
+          "from gp " + \
+          "join main_morph_t as main on gp.main_morph=main.id " + \
+          "join morph_constraints as dep on gp.dep_morph=dep.id " + \
+          "join main_word_t as main_w on gp.main_word=main_w.id " + \
+          "join word as dep_w on gp.dep_word=dep_w.id " + \
+          "order by mark desc;"
+
+    return begin + where_str + end
+
 
 def create_where_main_morph(main_morph_params):
     where_main_morph = ""
     for i in range(len(main_morph_params)):
         cur_param = main_morph_params[i]
-        s1 = "(main." + dict_field[cur_param] + " = " + "'" + cur_param + "'"
-        s1 += " or main." + dict_field[cur_param] + " = " + "'not_imp')"
+        s1 = "(" + dict_field[cur_param] + " = " + "'" + cur_param + "'"
+        s1 += " or " + dict_field[cur_param] + " = " + "'not_imp')"
         where_main_morph += s1
         if i != len(main_morph_params) - 1:
             where_main_morph += " and "
     return where_main_morph
 
 
-
-
-def get_patterns(cursor, level, main_morph_params=None, dep_morph_params=None, main_word_param=None,
-                 dep_word_param=None):
-    command, params = create_command(level, main_morph_params, dep_morph_params, main_word_param, dep_word_param)
-    #print(command)
-    #print(params)
+def get_patterns(cursor, level, main_morph_params=None, main_word_param=None):
+    command, params = create_command(level, main_morph_params, main_word_param)
+    # print(command)
+    # print(params)
     cursor.execute(command, params)
     res = cursor.fetchall()
     patterns_list = []
