@@ -6,6 +6,7 @@ class GPattern:
         self.mark = mark
         self.main_word_constraints = mc  # массив ограничений на морф
         self.dependent_word_constraints = dc  # массив ограничений на морф
+        self.h = hash(tuple(self.main_word_constraints + self.dependent_word_constraints)) # хеш показывает, похожи ли морфологические ограничения на главное и зависимое слова
 
     # здесь уже не может быть в ограничениях _any
 
@@ -39,15 +40,19 @@ class GPattern:
 
     def is_identical_dif_level(self, other):
         # модели разных уровней но с одинаковыми требованиями(мб какие-то требов. на главное/зависимое - None)
-        if self.main_word_constraints != other.main_word_constraints:
-            return False
-        if self.dependent_word_constraints != other.dependent_word_constraints:
+        if self.h != other.h: # если хеши различны, значит требования на главное/зависимое отличаются
             return False
 
         if self.main_word is not None and other.main_word is not None and self.main_word != other.main_word:
             return False
 
         if self.dependent_word is not None and other.dependent_word is not None and self.dependent_word != other.dependent_word:
+            return False
+
+        if self.main_word_constraints != other.main_word_constraints:
+            return False
+
+        if self.dependent_word_constraints != other.dependent_word_constraints:
             return False
 
         return True

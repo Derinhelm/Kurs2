@@ -117,6 +117,8 @@ class NextWordSearcher:
                 best_triple_index, best_triple = i, self.triples[i]
         (best_main_pos, (best_dep_pos, best_dep_var), best_gp) = self.triples[best_triple_index]
         self.triples.pop(best_triple_index)
+        self.triples = list(filter(lambda trip:not best_gp.is_identical_dif_level(trip[2]), self.triples)) # удаляем индексы МУ, идентичных выбранному (только другого уровня)
+
         return best_main_pos, best_gp, best_dep_pos, best_dep_var
 
     def prepare_last_parsed(self):
