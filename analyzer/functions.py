@@ -82,7 +82,7 @@ def create_where_main_morph(main_morph_params):
     return where_main_morph
 
 
-def get_patterns(cursor, level, main_morph_params=None, main_word_param=None):
+def get_patterns_from_db(cursor, level, lexemes=None, main_morph_params=None, main_word_param=None):
     command, params = create_command(level, main_morph_params, main_word_param)
     # print(command)
     # print(params)
@@ -90,19 +90,24 @@ def get_patterns(cursor, level, main_morph_params=None, main_word_param=None):
     res = cursor.fetchall()
     patterns_list = []
     for pattern in res:
-        main_constr = []
-        dep_constr = []
-        for i in range(3, NUMBER_MORPH_PARAMETRS + 3):
-            if pattern[i] != 'not_imp':
-                main_constr.append(pattern[i])
-        for i in range(3 + NUMBER_MORPH_PARAMETRS, 3 + 2 * NUMBER_MORPH_PARAMETRS):
-            if pattern[i] != 'not_imp':
-                dep_constr.append(pattern[i])
-        new_pattern = GPattern(level, pattern[0], pattern[1], pattern[2],
-                               main_constr, dep_constr)
-        # toDO
-        if 'preposition' in new_pattern.main_word_constraints and 'adverb' in new_pattern.dependent_word_constraints:
-            print("prep + adverb")
-        else:
-            patterns_list.append(new_pattern)
+        dw = pattern[1]
+        if level != 3 or (level == 3 and dw in lexemes):
+    #учитываем МУ, если в МУ 3 уровня ограничению на лексему зависимого слова удовлетворяет хотя бы один вариант разбора словоформы в предложении
+            mw = pattern[0]
+            mark = pattern[2]
+            main_constr = []
+            dep_constr = []
+            for i in range(3, NUMBER_MORPH_PARAMETRS + 3):
+                if pattern[i] != 'not_imp':
+                    main_constr.append(pattern[i])
+            for i in range(3 + NUMBER_MORPH_PARAMETRS, 3 + 2 * NUMBER_MORPH_PARAMETRS):
+                if pattern[i] != 'not_imp':
+                    dep_constr.append(pattern[i])
+            new_pattern = GPattern(level, mw, dw, mark,
+                                   main_constr, dep_constr)
+            # toDO
+            if 'preposition' in new_pattern.main_word_constraints and 'adverb' in new_pattern.dependent_word_constraints:
+                print("prep + adverb")
+            else:
+                patterns_list.append(new_pattern)
     return patterns_list

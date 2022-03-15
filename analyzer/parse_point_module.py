@@ -60,12 +60,21 @@ class SentenceInfo:
         word_texts, self.sent_title_with_numbers, self.punctuation_indexes = self.split_string(input_str)
         self.sent_title_without_numb = input_str
         con = psycopg2.connect(dbname='gpatterns', user='postgres',
-                               password='postgres', host='localhost', port='5433')
+                               password='postgres', host='localhost', port='5432')
         morph_analyzer = pymorphy2.MorphAnalyzer()
         self.words = []  # [Word]
         for word_text in word_texts:
-            word_info = Word(con, morph_analyzer, word_text)
+            print("Начата обработка слова ", word_text)
+            word_info = Word(morph_analyzer, word_text)
             self.words.append(word_info)
+            print("Закончена обработка слова", word_text)
+
+        lexemes = set()
+        for w in self.words:
+            lexemes |= set(w.get_all_lexema_variants()) # Собираем все варианты начальных форм слов в предложении
+
+        for w in self.words:
+            w.create_patterns(con, lexemes)
         con.close()
 
     def __repr__(self):

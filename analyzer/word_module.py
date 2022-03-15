@@ -1,8 +1,9 @@
 import pymorphy2
 
 from constants import *
-from functions import get_patterns
+from functions import get_patterns_from_db
 
+from timeit import default_timer as timer
 
 class Morph:  # для хранения морфологических характеристик
     names = ['s_cl', 'animate', 'gender', 'number', 'case_morph', 'reflection', 'perfective',
@@ -166,17 +167,27 @@ class WordForm:
     def __repr__(self):
         return self.normal_form + " " + self.morph.__repr__()
 
-    def create_patterns(self, con):
+    def create_patterns(self, con, lexemes):
+        # lexemes - лексемы слов, встречающихся в предложении. Из моделей 3 уровня оставляем только те, для которых в предложении есть подходящие лексемы
         cursor = con.cursor()
         morph_constr = self.morph.get_imp()
-        cur_first = get_patterns(cursor, 1, main_morph_params=morph_constr)
-        cur_sec = get_patterns(cursor, 2, main_morph_params=morph_constr, main_word_param=self.normal_form)
-        cur_third = get_patterns(cursor, 3, main_morph_params=morph_constr, main_word_param=self.normal_form)
+        begin_time = timer()
+        cur_first = get_patterns_from_db(cursor, 1, main_morph_params=morph_constr)
+        print("Вариант разбора с нормальной формой", self.normal_form)
+        res_time = timer() - begin_time
+        print("Моделей управления 1 уровня:", len(cur_first), ", время:", res_time)
+        begin_time = timer()
+        cur_sec = get_patterns_from_db(cursor, 2, main_morph_params=morph_constr, main_word_param=self.normal_form)
+        res_time = timer() - begin_time
+        print("Моделей управления 2 уровня:", len(cur_sec), ", время:", res_time)
+        begin_time = timer()
+        cur_third = get_patterns_from_db(cursor, 3, main_morph_params=morph_constr, main_word_param=self.normal_form, lexemes=lexemes)
+        res_time = timer() - begin_time
+        print("Моделей управления 3 уровня:", len(cur_third), ", время:", res_time)
         cursor.close()
         self.g_patterns += cur_third
         self.g_patterns += cur_sec
         self.g_patterns += cur_first
-        print(len(self.g_patterns))
         return
 
     def get_patterns(self):
@@ -185,14 +196,17 @@ class WordForm:
     def get_morph(self):
         return self.morph
 
+    def get_normal_form(self):
+        return self.normal_form
+
 
 class Word:
-    def __init__(self, con, morph_analyzer: pymorphy2.MorphAnalyzer, word_text):
+    def __init__(self, morph_analyzer: pymorphy2.MorphAnalyzer, word_text):
         self.word_text = word_text
         self.forms = []
-        self.morph_parse(con, morph_analyzer)
+        self.morph_parse(morph_analyzer)
 
-    def morph_parse(self, con, morph_analyzer: pymorphy2.MorphAnalyzer):
+    def morph_parse(self, morph_analyzer: pymorphy2.MorphAnalyzer):
         if self.word_text[-1] == '.':
             p = morph_analyzer.parse(self.word_text[:-1])
             abbr = True
@@ -205,9 +219,20 @@ class Word:
                 # чтобы предлогу "к" не приписывался вариант кандидат
                 morph = Morph(cur_parse, self.word_text)
                 cur_form = WordForm(morph, cur_parse.normal_form, cur_parse.score)
-                cur_form.create_patterns(con)
+                print("Создан WordForm:", cur_form)
                 self.forms.append(cur_form)
+
         return
+
+    def create_patterns(self, con, lexemes):
+        for cur_form in self.forms:
+            cur_form.create_patterns(con, lexemes)
+            print("Получены модели управления")
+        return
+
+    def get_all_lexema_variants(self):
+        '''Возвращает лексемы всех вариантов разбора слова'''
+        return [v.get_normal_form() for v in self.forms]
 
     def get_all_form_patterns(self):
         return [form.g_patterns for form in self.forms]
