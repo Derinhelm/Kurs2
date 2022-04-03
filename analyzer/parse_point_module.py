@@ -9,7 +9,7 @@ import pymorphy2
 import re
 
 from next_word_search_module import NextWordSearcher
-from patterns import GPattern
+from analyzer.patterns import GPattern
 from visualize import ParsePointView, ParsePointTreeView
 from word_module import Word
 
@@ -19,7 +19,6 @@ class WordInSentence:
     def __init__(self, number_in_sentence: int):
         self.parsed = False
         self.used_morph_answer = None  # номер варианта разбора для разобранных слов
-        self.used_gp = []  # типа Gp используются для однородных и проверки на наличие зависимого у предлога и тп
         self.number_in_sentence = number_in_sentence
 
     def __repr__(self):
@@ -29,14 +28,19 @@ class WordInSentence:
 
     def __eq__(self, other):
         '''Провеяется, что выбраны одинаковые варианты разбора словоформы'''
+        if self.number_in_sentence != other.number_in_sentence:
+            return False
+
         if self.parsed != other.parsed:
             return False
 
         if self.used_morph_answer != other.used_morph_answer:
             return False
 
-        #used_gp не проверяются, тк связи между словами проверяются в ParsePoint
         return True
+
+    def get_number(self):
+        return self.number_in_sentence
 
     def __hash__(self):
         return hash(self.number_in_sentence) # TODO: нормально ли?
@@ -49,11 +53,6 @@ class WordInSentence:
     def is_parsed(self):
         return self.parsed
 
-    def add_gp(self, pattern: GPattern, dep_word):
-        # dep_word - WordInSentence
-        new_gp = Gp(pattern, dep_word)
-        self.used_gp.append(new_gp)
-
 class Gp:
     def __init__(self, mod: GPattern, dw: WordInSentence):
         self.model = mod
@@ -61,6 +60,12 @@ class Gp:
 
     def get_dep_word(self):
         return self.dep_word
+
+    def get_pattern(self):
+        return self.model
+
+    def __repr__(self):
+        return str(self.dep_word.get_number())
 
 class SentenceInfo:
     '''Хранит информацию о вариантах разбора каждого слова из предложения.'''
@@ -175,14 +180,14 @@ class ParsePoint:
     direct_for_is_applicable = 1
 
     def __init__(self, pp_words:[WordInSentence], status: str,
-                     parsed, point_number: int, parsed_words, potential_conjs,
+                     point_number: int, parsed_words, link_words, potential_conjs,
                      sentence_info: SentenceInfo, difference: TripleInfo, parent_pp=None):
         self.pp_words = pp_words
         self.next_word_searcher = None
         self.status = status
-        self.parsed = parsed # list(tuple(int, int)) [(1,0)] [(main_pp_word_pos, depending_pp_word_pos)]
+        self.link_words = link_words # Словарь, номер_слова: [Gp]. Для связи главного слова и моделей управления, связанных с зависимым
         self.point_number = point_number # int
-        self.parsed_words = parsed_words # set(int) TODO: parsed и parsed_words - дублирующаяся информация?
+        self.parsed_words = parsed_words # set(int)
         self.potential_conjs = potential_conjs # set(int) TODO: в аннотацию типов
         self.view = None
         self.sentence_info = sentence_info  # TODO переделать! sentence_info лежит везде
@@ -202,9 +207,23 @@ class ParsePoint:
             if self.pp_words[i] != other.pp_words[i]:
                 return False
 
-        # У точек разбора одинаковые связи между словами
-        if set(self.parsed) != set(other.parsed):
+        #Проверка, что у точек разбора одинаковые связи между словами
+
+            #Проверка, что у точек разбора одинаковый набор главных слов
+        if set(self.link_words.keys()) != set(other.link_words.keys()):
             return False
+
+        for main_word_ind in self.link_words.keys():
+            self_dep = set()
+            other_dep = set()
+            for gp in self.link_words[main_word_ind]:
+                dep_ind = gp.get_dep_word().get_number()
+                self_dep.add(dep_ind)
+            for gp in other.link_words[main_word_ind]:
+                dep_ind = gp.get_dep_word().get_number()
+                other_dep.add(dep_ind)
+            if self_dep != other_dep: # Проверка, что для данного главного в обоих точках разбора одинаковый набор зависимых
+                return False
 
         return True
 
@@ -216,8 +235,9 @@ class ParsePoint:
 
     def __repr__(self):
         ans = str(self.point_number) + ":"
-        for i in self.parsed:
-            ans += str(i[0]) + "+" + str(i[1]) + ";"
+        for main_ind, link_words in self.link_words.items():
+            for link_word in link_words: # сейчас link_word - Gp
+                ans += str(main_ind) + "+" + str(link_word.get_dep_word().get_number()) + ";"
         return ans
 
     def get_point_number(self):
@@ -278,13 +298,13 @@ class ParsePoint:
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[first_word_pos].fix_morph_variant(first_word_var)
 
-        new_parsed = copy.deepcopy(self.parsed)
         new_point_number = max_point_number + 1
         new_parsed_words = set([first_word_pos])
+        new_link_words = {i:[] for i in range(len(self.pp_words))}
         new_potential_conjs = copy.deepcopy(self.potential_conjs)
         difference = TripleInfo(dep_pos=first_word_pos, dep_var=first_word_var)
-        new_parse_point = ParsePoint(pp_words=new_pp_words, status=self.status, parsed=new_parsed, point_number=new_point_number,
-                                     parsed_words=new_parsed_words,
+        new_parse_point = ParsePoint(pp_words=new_pp_words, status=self.status, point_number=new_point_number,
+                                     parsed_words=new_parsed_words, link_words=new_link_words,
                                      potential_conjs=new_potential_conjs, sentence_info=self.sentence_info, difference=difference, parent_pp=self)
 
         main_word = new_parse_point.pp_words[first_word_pos]
@@ -340,12 +360,15 @@ class ParsePoint:
         new_pp_words = copy.deepcopy(self.pp_words)
         new_pp_words[depending_pp_word_pos].fix_morph_variant(dep_variant)
 
-        new_parsed = copy.deepcopy(self.parsed)
-        new_parsed.append((main_pp_word_pos, depending_pp_word_pos))
         new_point_number = count_of_unroot_parse_points + 1
 
         new_parsed_words = copy.deepcopy(self.parsed_words)
         new_parsed_words.add(depending_pp_word_pos)
+
+        new_link_words = copy.deepcopy(self.link_words)
+        new_gp = Gp(g_pattern_to_apply, new_pp_words[depending_pp_word_pos])
+        new_link_words[main_pp_word_pos].append(new_gp)
+
         new_potential_conjs = copy.deepcopy(self.potential_conjs)
 
         new_view = copy.deepcopy(self.view)
@@ -353,11 +376,9 @@ class ParsePoint:
         # TODO сначала вместо view - None, потом ставим его вручную...
         difference = TripleInfo(dep_pos=depending_pp_word_pos, dep_var=dep_variant, main_pos=main_pp_word_pos, pattern=g_pattern_to_apply)
         new_parse_point = ParsePoint(pp_words=new_pp_words, status=self.status,
-                                     parsed=new_parsed, point_number=new_point_number, parsed_words=new_parsed_words,
+                                     point_number=new_point_number, parsed_words=new_parsed_words, link_words=new_link_words,
                                      potential_conjs=new_potential_conjs, sentence_info=self.sentence_info, difference=difference, parent_pp=self)
 
-        new_parse_point.pp_words[main_pp_word_pos].add_gp(g_pattern_to_apply,
-                                                          new_parse_point.pp_words[depending_pp_word_pos])
         dep_word = new_parse_point.pp_words[depending_pp_word_pos]
         main_word = new_parse_point.pp_words[main_pp_word_pos]
         new_view = self.view.create_child_view(new_parse_point, main_word, dep_word)
@@ -389,14 +410,15 @@ class ParsePoint:
     def check_prep(self):
         for i in range(len(self.pp_words)):
             cur_main = self.pp_words[i]
+            links_with_dep = self.link_words[i] # список связей главного слова с зависимыми
             if cur_main.is_parsed():
                 main_morph = self.sentence_info.get_form_info(cur_main).get_morph()
                 if main_morph.is_preposition():
-                    if not cur_main.used_gp:  # у предлога нет зависимого
+                    if not links_with_dep:  # у предлога нет зависимого
                         return False
-                    if len(cur_main.used_gp) > 1:  # у предлога больше одного зависимого
+                    if len(links_with_dep) > 1:  # у предлога больше одного зависимого
                         return False
-                    cur_dep = cur_main.used_gp[0].dep_word
+                    cur_dep = links_with_dep[0].dep_word
                     if cur_dep.number_in_sentence <= i:  # у предлога зависимое должно стоять справа от главного
                         return False
         return True
@@ -409,7 +431,8 @@ class ParsePoint:
                 main_morph = self.sentence_info.get_form_info(cur_main).get_morph()
                 count_subject = 0
                 if main_morph.is_verb():
-                    for cur_gp in cur_main.used_gp:
+                    links_with_dep = self.link_words[i] # список связей данного главного слова с зависимыми
+                    for cur_gp in links_with_dep:
                         dep_word = cur_gp.dep_word
                         if dep_word.is_parsed():
                             dep_morph = self.sentence_info.get_form_info(dep_word).get_morph()
@@ -422,8 +445,10 @@ class ParsePoint:
 
     def find_descendants(self):
         descendants = {}
-        for main in self.pp_words:
-            descendants[main] = set(map(lambda x: x.dep_word, main.used_gp))
+        for i in range(len(self.pp_words)):
+            links_with_dep = self.link_words[i]
+            main = self.pp_words[i]
+            descendants[main] = set(map(lambda x: x.dep_word, links_with_dep))
         changes = -1
         while changes != 0:
             changes = 0
@@ -455,21 +480,20 @@ class ParsePoint:
         descendants = self.find_descendants() #{WordInSentence: set(WordInSentence)}
         comp_fun = lambda x: self.sentence_info.get_word(x.dep_word).get_forms()[
             x.dep_word.used_morph_answer].morph.get_homogeneous_params()
-        new_used_gp = []
         homogeneous_nodes = []
-        for main in self.pp_words:
-            for key, group_items in groupby(sorted(main.used_gp, key=comp_fun), key=comp_fun):
+        for main_ind in range(len(self.pp_words)):
+            used_gp = self.link_words[main_ind] #[Gp]
+            main = self.pp_words[main_ind]
+            for key, group_items in groupby(sorted(used_gp, key=comp_fun), key=comp_fun):
                 group_items_list = sorted(list(group_items), key=lambda x: x.dep_word.number_in_sentence) #[Gp]
+                # key - ('noun', 'nominative', 'prep_type_any')
+                # group_items_list - список из Gp, отсортированных по номеру в предложении
                 if len(group_items_list) > 1:
                     title = self.create_homogeneous_title(group_items_list, descendants, punctuation_indexes)
                     dep_word_texts = [self.sentence_info.get_text(gp.get_dep_word()) for gp in group_items_list]
                     h = HomogeneousGroup(dep_word_texts, title)
-                    new_used_gp.append(h)
                     main_text = self.sentence_info.get_text(main)
                     homogeneous_nodes.append((main_text, h))
-                else:
-                    new_used_gp.append(group_items_list)
-            main.used_gp = new_used_gp
         return homogeneous_nodes
 
     def create_first_parse_points(self, sentence_info):
@@ -528,8 +552,9 @@ class Tree:
             if words[word_number].first_conj_variant() is not None:  # у слова есть вариант разбора - союз
                 potential_conjs.add(word_number)
             pp_words.append(WordInSentence(word_number))
-        pp = ParsePoint(pp_words=pp_words, status='intermediate', parsed=[],
-                        point_number=0, parsed_words=set(), potential_conjs=potential_conjs,
+        link_words = {i:[] for i in range(len(pp_words))}
+        pp = ParsePoint(pp_words=pp_words, status='intermediate',
+                        point_number=0, parsed_words=set(), link_words=link_words, potential_conjs=potential_conjs,
                         sentence_info=sentence_info, difference=None)
         # Из root_pp пунктирные ребра не проводятся.
         # Они сразу строятся, как невыбранные сплошные ребра, соединяющие root и ТР с одним разобранным словом

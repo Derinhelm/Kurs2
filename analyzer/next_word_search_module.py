@@ -1,5 +1,5 @@
 import copy
-from patterns import GPattern
+from analyzer.patterns import GPattern
 
 SIMILAR_PARAM = 450
 

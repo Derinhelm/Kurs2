@@ -1,5 +1,5 @@
-from constants import dict_field, NUMBER_MORPH_PARAMETRS
-from patterns import GPattern
+from analyzer.constants import dict_field, NUMBER_MORPH_PARAMETRS
+from analyzer.patterns import GPattern
 
 
 def create_command(level, main_morph_params, main_word_param):

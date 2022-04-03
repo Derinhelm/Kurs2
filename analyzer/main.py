@@ -8,11 +8,10 @@ def parse(str1, count = 1):
     results = []
     ans = []
     for i in range(count):
-        #print("------------------------------------------------------", i)
         try:
             new_parse = t.sint_parse()
 
-        except StopIteration: # Больше вариантов разбора нет
+        except StopIteration: # Время истекло
             break
 
         else:

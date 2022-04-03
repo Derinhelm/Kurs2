@@ -1,7 +1,7 @@
 import pymorphy2
 
-from constants import *
-from functions import get_patterns_from_db
+from analyzer.constants import *
+from analyzer.functions import get_patterns_from_db
 
 from timeit import default_timer as timer
 
