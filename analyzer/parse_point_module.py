@@ -19,7 +19,7 @@ class WordInSentence:
     def __init__(self, number_in_sentence: int):
         self.parsed = False
         self.used_morph_answer = None  # номер варианта разбора для разобранных слов
-        self.used_gp = []  # типа Gp
+        self.used_gp = []  # типа Gp используются для однородных и проверки на наличие зависимого у предлога и тп
         self.number_in_sentence = number_in_sentence
 
     def __repr__(self):
@@ -28,10 +28,18 @@ class WordInSentence:
         return "word № " + str(self.number_in_sentence) + " not_parsed"
 
     def __eq__(self, other):
-        return self.number_in_sentence == other.number_in_sentence
+        '''Провеяется, что выбраны одинаковые варианты разбора словоформы'''
+        if self.parsed != other.parsed:
+            return False
+
+        if self.used_morph_answer != other.used_morph_answer:
+            return False
+
+        #used_gp не проверяются, тк связи между словами проверяются в ParsePoint
+        return True
 
     def __hash__(self):
-        return self.number_in_sentence
+        return hash(self.number_in_sentence) # TODO: нормально ли?
 
     def fix_morph_variant(self, variant_position: int):
         """слово становится разобранным"""
@@ -166,19 +174,39 @@ class TripleInfo:
 class ParsePoint:
     direct_for_is_applicable = 1
 
-    def __init__(self, pp_words, status,
-                 parsed, point_number, parsed_words, potential_conjs, sentence_info, difference, parent_pp=None):
+    def __init__(self, pp_words:[WordInSentence], status: str,
+                     parsed, point_number: int, parsed_words, potential_conjs,
+                     sentence_info: SentenceInfo, difference: TripleInfo, parent_pp=None):
         self.pp_words = pp_words
         self.next_word_searcher = None
         self.status = status
-        self.parsed = parsed
-        self.point_number = point_number
-        self.parsed_words = parsed_words
-        self.potential_conjs = potential_conjs
+        self.parsed = parsed # list(tuple(int, int)) [(1,0)] [(main_pp_word_pos, depending_pp_word_pos)]
+        self.point_number = point_number # int
+        self.parsed_words = parsed_words # set(int) TODO: parsed и parsed_words - дублирующаяся информация?
+        self.potential_conjs = potential_conjs # set(int) TODO: в аннотацию типов
         self.view = None
         self.sentence_info = sentence_info  # TODO переделать! sentence_info лежит везде
         self.difference_from_parent = difference
         self.parent_pp = parent_pp
+
+    def __eq__(self, other):
+        if self.status != other.status:
+            return False
+
+        #Проверка, что в точках разбора одинаковое число слов
+        if len(self.pp_words) != len(other.pp_words):
+            return False
+
+        #Проверка, что все слова одинаково разобраны
+        for i in range(len(self.pp_words)):
+            if self.pp_words[i] != other.pp_words[i]:
+                return False
+
+        # У точек разбора одинаковые связи между словами
+        if set(self.parsed) != set(other.parsed):
+            return False
+
+        return True
 
     def is_dotted_children_created(self):
         return self.next_word_searcher is not None
@@ -241,7 +269,8 @@ class ParsePoint:
             self.pp_words[conj_ind].fix_morph_variant(conj_variant_num)
 
     def close(self):
-        self.status = 'intermediate-close'
+        if self.status == 'intermediate':
+            self.status = 'intermediate-close'
 
 
     def create_first_pp(self, first_word_pos: int, first_word_var: int, max_point_number: int):
@@ -583,4 +612,4 @@ class Tree:
             if self.last_created_point is not None:
                 self.last_created_point.create_dotted_edges()
 
-        return "timeEnd"  # Сделать на исключениях
+        raise StopIteration
