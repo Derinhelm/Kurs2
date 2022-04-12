@@ -6,6 +6,8 @@ import pymorphy2
 
 from corpora_filling.db_functions import *
 from corpora_filling.extract_pairs_of_words import get_pairs
+from timeit import default_timer as timer
+import traceback
 
 corporaToImpMorph = {'V': 's_cl', 'NUM': 's_cl', 'PR': 's_cl', 'A': 's_cl',
                      'ADV': 's_cl', 'CONJ': 's_cl', 'S': 's_cl', 'PART': 's_cl',
@@ -24,20 +26,66 @@ corporaToImpMorph = {'V': 's_cl', 'NUM': 's_cl', 'PR': 's_cl', 'A': 's_cl',
                      'СТРАД': 'voice'}
 
 morph_analyzer = pymorphy2.MorphAnalyzer()
-con = psycopg2.connect(dbname='gpatterns', user='postgres',
-                       password='postgres', host='localhost')
 
 
-class DBWordInfo:
-    def __init__(self, constraints_id, normal_form_id, prob):
-        self.constraints_id = constraints_id
-        self.normal_form_id = normal_form_id
-        self.probability = prob  # TODO это не вероятность! переименовать!
 
+class Transformators: # для хранения словарей-отображений.
+    def __init__(self, con, cursor):
+        self.morphology_to_patterns = {} # Словарь для быстрой трансформации тега СинТагРуса в морфологические требования
+        # (главное_слово, главная_лексема, тег_главного_из_синтагрус, зависимое_слово, зависимая_лексема, тег_зависимого_из_синтагрус) ->
+        # -> морфологические характеристики главного и зависимого слова в соответствующие требования на главное/зависимое слова модели управления
+
+        self.lexeme_to_lexeme_id = {} # лексема -> id лексемы в базе данных
+        self.morph_constraints_to_id = {} # морфологические ограничения -> id морфологических ограничений в базе данных
+        # например, (('s_cl','noun), ('animate', 'unanimate'), ('gender','neuter'), ('number','plural'), ('case_morph', 'genitive')) -> 5
+
+        self.con = con
+        self.cursor = cursor
+
+    def transform_tags_to_morph_constraints(self, main_word: str, main_lexeme: str, main_morph_tag: str, dep_word: str, dep_lexeme: str, dep_morph_tag: str):
+        '''На выходе: ((('s_cl','verb'),...), (('s_cl','noun'),...))'''
+        if (main_word, main_lexeme, main_morph_tag, dep_word, dep_lexeme, dep_morph_tag) in self.morphology_to_patterns:
+            return self.morphology_to_patterns[(main_word, main_lexeme, main_morph_tag, dep_word, dep_lexeme, dep_morph_tag)]
+        else:
+            main_res = get_parse_by_pymorphy(main_word, main_lexeme, main_morph_tag)
+            dep_res = get_parse_by_pymorphy(dep_word, dep_lexeme, dep_morph_tag)
+            if main_res is None or dep_res is None: # тег какой-то из словоформ не удалось разобрать
+                return (None, None)
+            main_morph, main_imp_features = main_res
+            dep_morph, dep_imp_features = dep_res
+            main_morph_constraints = create_constraints(main_morph, main_imp_features) # TODO: Может, делать создание требований на модель управления вместе
+            dep_morph_constraints = create_constraints(dep_morph, dep_imp_features)
+
+            self.morphology_to_patterns[(main_word, main_lexeme, main_morph_tag, dep_word, dep_lexeme, dep_morph_tag)] = (main_morph_constraints, dep_morph_constraints)
+            return (main_morph_constraints, dep_morph_constraints)
+
+    def transform_lexeme_to_db_id(self, lexeme: str):
+        if lexeme in self.lexeme_to_lexeme_id:
+            return self.lexeme_to_lexeme_id[lexeme]
+        else:
+            lexeme_id = find_or_insert_word(lexeme, self.con, self.cursor)
+            self.lexeme_to_lexeme_id[lexeme] = lexeme_id
+            return lexeme_id
+
+    def transform_morph_constraints_to_db_id(self, morph_constraints):
+        '''morph_constraints - (('s_cl', 'adjective'), ('gender', 'male'), ('number', 'single'), ('case_morph', 'instrumental'))'''
+        if morph_constraints in self.morph_constraints_to_id:
+            return self.morph_constraints_to_id[morph_constraints]
+        else:
+            morph_id = find_or_insert_morph_constraints(morph_constraints, self.con, self.cursor)
+            self.morph_constraints_to_id[morph_constraints] = morph_id
+            return morph_id
+
+    def save_to_file(self, file_title):
+        with open(file_title, 'wb') as f:
+            pickle.dump((self.morphology_to_patterns, self.morph_constraints_to_id, self.lexeme_to_lexeme_id), f)
+
+    def get_dicts_from_file(self, file_title):
+        with open(file_title, 'rb') as f:
+            (self.morphology_to_patterns, self.morph_constraints_to_id, self.lexeme_to_lexeme_id) = pickle.load(f)
 
 def parse_corpora_tag(tag_corpora):
-    # возвращает 1. список лямбда-функций, которые надо применить к морфу
-    # для проверки на адекватность
+    # возвращает 1. список лямбда-функций, которые надо применить к морфу для проверки на адекватность
     # 2. set важных параметров
     check_funs = []
     imp_features = set()
@@ -106,6 +154,19 @@ def parse_corpora_tag(tag_corpora):
         elif cur_param == 'МН':
             check_funs.append(lambda m: m.number == 'plural')
 
+
+        elif cur_param == 'МУЖ':
+            check_funs.append(lambda m: m.gender == 'male')
+        elif cur_param == 'ЖЕН':
+            check_funs.append(lambda m: m.gender == 'female')
+        elif cur_param == 'СРЕД':
+            check_funs.append(lambda m: m.gender == 'neuter')
+
+        elif cur_param == 'ОД':
+            check_funs.append(lambda m: m.animate == 'animate' or m.animate == 'animate_any')
+        elif cur_param == 'НЕОД':
+            check_funs.append(lambda m: m.animate == 'unanimate' or m.animate == 'animate_any')
+
         if cur_param not in ['СЛ', 'COM', 'СМЯГ', 'НЕСТАНД', 'МЕТА', 'НЕПРАВ']:
             imp_features.add(corporaToImpMorph[cur_param])
     check_funs.append(lambda m: m.s_cl not in ['conjunction', 'particle', 'interjection'])
@@ -134,18 +195,17 @@ def eq_norm_form(s1, s2, parse_s2):
 
 def get_parse_by_pymorphy(cur_word, cur_normal_form, cur_tag_corpora):
     """return list of pairs (constraint_list, normal_form)"""
-    if cur_word == 'должны':
-        x = 0
     if not check_word(cur_word):
-        return ()
+        return None
     arr_parse = morph_analyzer.parse(cur_word)
     res_parse = parse_corpora_tag(cur_tag_corpora.split())
     if res_parse is None:  # слово типа NID, 'as-sifr'
-        return ()
+        return None
     (check_funs, imp_features) = res_parse
     # print(cur_word, cur_tag_corpora, cur_normal_form, arr_parse)
-    not_imp_feat = set(Morph.names) - imp_features
-    good_parse_pymorphy = ()
+    good_parse_pymorphy = []
+    best_parse_pymorphy = None
+    best_prob = 0
     for cur_parse in arr_parse:
         if eq_norm_form(cur_parse.normal_form, cur_normal_form, cur_parse) or \
                 'НЕСТАНД' in cur_tag_corpora or 'НЕПРАВ' in cur_tag_corpora or \
@@ -162,10 +222,13 @@ def get_parse_by_pymorphy(cur_word, cur_normal_form, cur_tag_corpora):
                         flag_true_parse = False
                         break
                 if flag_true_parse:
-                    if m not in good_parse_pymorphy:
-                        morph_constraints = create_constraints(m, not_imp_feat)
-                        good_parse_pymorphy += ((morph_constraints, nw, prob),)
-    return good_parse_pymorphy
+                    if prob > best_prob:
+                        best_prob = prob
+                        best_parse_pymorphy = (m, imp_features)  # Если вдруг вараинтов разбора несколько, возвращаем самый вероятный (ооочень редкий случай)
+                        good_parse_pymorphy.append((m, imp_features)) #TODO: убрать! Будет сильно замедлять (пока нужно, чтобы отследить, какие теги дают несколько вариантов)
+    if len(good_parse_pymorphy) >= 2:
+        print("Два варианта разбора:", (cur_word, cur_normal_form, cur_tag_corpora), good_parse_pymorphy)
+    return best_parse_pymorphy
 
 
 def insert_pattern3(con, cursor, main_morph_number, dep_morph_number,
@@ -237,30 +300,6 @@ def insert_pattern(con, cursor, main_morph_number, main_normal_form_number, dep_
     insert_pattern1(con, cursor, main_morph_number, dep_morph_number, mark)
 
 
-Counter = 0
-
-
-def insert_all_pairs(con, cursor, main_inserts, dep_inserts):
-    # массив номеров слова в таблице word(мб несколько в дальнейшем)
-    # пока массив из одного элемента
-    denominator = 0
-    for cur_main in main_inserts:
-        for cur_dep in dep_inserts:
-            denominator += cur_main.probability * cur_dep.probability
-    for cur_main in main_inserts:
-        for cur_dep in dep_inserts:
-            main_morph_number = cur_main.constraints_id
-            main_normal_form_number = cur_main.normal_form_id
-            dep_morph_number = cur_dep.constraints_id
-            dep_normal_form_number = cur_dep.normal_form_id
-            mark = cur_main.probability * cur_dep.probability / denominator  # TODO логарифмировать
-            insert_pattern(con, cursor, main_morph_number, main_normal_form_number,
-                           dep_morph_number, dep_normal_form_number, mark)
-    if len(main_inserts) == 0 or len(dep_inserts) == 0:
-        global Counter
-        Counter += 1
-
-
 def check_word(word):
     if word is None:
         return False
@@ -271,76 +310,75 @@ def check_word(word):
     return True
 
 
-def create_constraints(morph, not_imp):
-    variant_constraints = ()
-    for attr in Morph.names:
-        if attr not in not_imp:
-            val = getattr(morph, attr)
-            if val[-4:] != "_any":
-                variant_constraints += ((attr, val),)
+def create_constraints(morph, imp_features):
+    variant_constraints = []
+    for attr in imp_features:
+        val = getattr(morph, attr)
+        if val[-4:] != "_any":
+            variant_constraints.append((attr, val))
 
-    return variant_constraints
-
-
-Corpora_to_pymorphy, Morph_to_db_id, Normal_to_db_id = {}, {}, {}
-
-
-def from_pymorphy_labels_to_db_info(morph_cons_list, normal_form, prob):
-    morph_db_id = Morph_to_db_id[morph_cons_list]
-    normal_form_id = Normal_to_db_id[normal_form]
-    return DBWordInfo(morph_db_id, normal_form_id, prob)
-
-
-def from_corpora_to_db_info(word, normal_form, corpora_feat):
-    pymorphy_labels = Corpora_to_pymorphy[(word, normal_form, corpora_feat)]
-    return list(map(lambda lab: from_pymorphy_labels_to_db_info(*lab), pymorphy_labels))
-
+    return tuple(variant_constraints) # tuple - тк потом будет использоваться как ключ словаря
 
 if __name__ == '__main__':
+
+    con = psycopg2.connect(dbname='gpatterns', user='postgres',
+                     password='postgres', host='localhost')
+    con.autocommit = False
+    cursor = con.cursor()
+
+    transformators = Transformators(con, cursor) # Словари для быстрой трансформации тега СинТагРуса в морфологические требования и тп
     if "processed_file_index.pickle" not in os.listdir():  # храним первую необработанный
         text_index = 0
     else:
         with open('processed_file_index.pickle', 'rb') as tf:
             text_index = pickle.load(tf)
-    pair_files = os.listdir("all")
+        transformators.get_dicts_from_file('Transformators.pickle')
+
+    pair_files = os.listdir("corpora_texts")
     first_unproc_file_index = text_index
-    try:  # TODO не убирать для нового файла !
+    begin_time = timer()
+
+
+    try:
         for file_ind in range(text_index, len(pair_files)):
             file_title = pair_files[file_ind]
-            print(file_title)
-            pair_list = get_pairs('all/' + file_title) # получаем список пар слов (не все из них - модели)
+            print(file_title, timer()-begin_time)
+            pair_list = get_pairs('corpora_texts/' + file_title) # получаем список пар слов (не все из них - модели)
+            # pair_list - Список вида ('инструкций', 'инструкция', 'S МН ЖЕН РОД НЕОД', 'описывающих', 'описывать', 'V НЕСОВ ПРИЧ НЕПРОШ МН РОД', 'corpora_texts/Algoritm.tgt', 1)
+
             text_corpora_labels = set()
-            for (mw, mn, mm, dw, dn, dm, _, _) in pair_list:
-                text_corpora_labels.add((mw, mn, mm))
-                text_corpora_labels.add((dw, dn, dm))
-            new_corpora_labels = {word_info: get_parse_by_pymorphy(*word_info)
-                                  for word_info in text_corpora_labels - Corpora_to_pymorphy.items()}
-            Corpora_to_pymorphy.update(new_corpora_labels)
-            morph_constrations = set()
-            normal_forms = set()
-            for (m, nf, prob) in [e for lst in Corpora_to_pymorphy.values() for e in lst]:
-                morph_constrations.add(m)
-                normal_forms.add(nf)
-            print("Corpora_to_pymorphy dict end")
-            cursor = con.cursor()
-            Morph_to_db_id.update({cons_lst: find_or_insert_morph_constraints(cons_lst, con, cursor)
-                                   for cons_lst in morph_constrations - Morph_to_db_id.items()})
-            print("Morph_to_db_id end")
-            Normal_to_db_id.update({nf: find_or_insert_word(nf, con, cursor)
-                                    for nf in normal_forms - Normal_to_db_id.items()})
-            print("Normal_to_db_id end")
             i = 0
             pair_len = len(pair_list)
-            for (mw, mn, mm, dw, dn, dm, _, _) in pair_list:
-                insert_all_pairs(con, cursor, from_corpora_to_db_info(mw, mn, mm), from_corpora_to_db_info(dw, dn, dm))
-                if i % 100 == 0:
-                    print(i, pair_len, sep=" / ")
-                i += 1
-            print("not gp:", Counter, "/", pair_len )
-            Counter = 0
-            cursor.close()
-        first_unproc_file_index += 1
-    except Exception as exc:
-        print(exc)
+            res = {}
+            for (main_word, main_lexeme, main_morph_tag, dep_word, dep_lexeme, dep_morph_tag, _, _) in pair_list:
+                (t_main_morph, t_dep_morph) = transformators.transform_tags_to_morph_constraints(main_word, main_lexeme, main_morph_tag, dep_word, dep_lexeme, dep_morph_tag)
+                # морф.ограничения из корпуса -> морф.ограничения для бд
+                if t_main_morph is not None and t_dep_morph is not None:
+                    main_lexeme_id = transformators.transform_lexeme_to_db_id(main_lexeme)
+                    dep_lexeme_id = transformators.transform_lexeme_to_db_id(dep_lexeme)
+                    main_morph_id = transformators.transform_morph_constraints_to_db_id(t_main_morph)
+                    dep_morph_id = transformators.transform_morph_constraints_to_db_id(t_dep_morph)
+                    if (main_morph_id, main_lexeme_id, dep_morph_id, dep_lexeme_id) in res: # Для оптимищазации. Сначала собираем статистику по МУ для одного текста, потом вставляем все МУ из одного текста в базу
+                        res[(main_morph_id, main_lexeme_id, dep_morph_id, dep_lexeme_id)] += 1
+                    else:
+                        res[(main_morph_id, main_lexeme_id, dep_morph_id, dep_lexeme_id)] = 1
+                    if i % 100 == 0:
+                        print(i, pair_len, sep=" / ")
+                    i += 1
+
+            for ((main_morph_id, main_lexeme_id, dep_morph_id, dep_lexeme_id), mark) in res.items():
+                insert_pattern(con, cursor, main_morph_id, main_lexeme_id,
+                               dep_morph_id, dep_lexeme_id, mark)
+
+            # Выделили все модели управления из файла
+            con.commit()
+            transformators.save_to_file('Transformators.pickle')
+            first_unproc_file_index += 1
+    except KeyboardInterrupt as exc:
         with open('processed_file_index.pickle', 'wb') as f:
             pickle.dump(first_unproc_file_index, f)
+            con.rollback()
+
+    finally:
+        cursor.close()
+        con.close()
